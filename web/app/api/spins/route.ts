@@ -6,6 +6,7 @@ import {
   getAddress,
   http,
   isAddress,
+  parseAbiItem,
   type Address,
   type Hex,
   type Log,
@@ -73,8 +74,7 @@ async function getRecentUbiClaims(rootAddress: Address) {
       : start + batchSize - BigInt(1);
     const logs = await publicClient.getLogs({
       address: UBI_SCHEME_ADDRESS,
-      eventName: 'UBIClaimed',
-      abi: ubiSchemeV2ABI,
+      event: parseAbiItem('event UBIClaimed(address indexed account, uint256 amount)'),
       args: { account: rootAddress },
       fromBlock: start,
       toBlock: end,
