@@ -55,14 +55,22 @@ export async function POST(request: NextRequest) {
   if (receipt instanceof NextResponse) return receipt;
   const eventName = decision === 'approved' ? 'RewardReleased' : 'SubmissionRejected';
   const event = findTaskEvent(receipt.logs, eventName);
-  if (
-    !event ||
-    (decision === 'approved' && event.eventName !== 'RewardReleased') ||
-    (decision === 'rejected' && event.eventName !== 'SubmissionRejected') ||
-    event.args.taskId.toLowerCase() !== task.escrow_task_id.toLowerCase() ||
+  if (!event || event.args.taskId.toLowerCase() !== task.escrow_task_id.toLowerCase()) {
+    return NextResponse.json({ error: 'Review transaction does not match this submission.' }, { status: 400 });
+  }
+  if (decision === 'approved') {
+    if (
+      event.eventName !== 'RewardReleased' ||
+      event.args.worker.toLowerCase() !== submission.worker_address.toLowerCase() ||
+      event.args.reviewer.toLowerCase() !== verified.address.toLowerCase() ||
+      event.args.amount !== BigInt(task.reward_per_completion)
+    ) {
+      return NextResponse.json({ error: 'Review transaction does not match this submission.' }, { status: 400 });
+    }
+  } else if (
+    event.eventName !== 'SubmissionRejected' ||
     event.args.worker.toLowerCase() !== submission.worker_address.toLowerCase() ||
-    event.args.reviewer.toLowerCase() !== verified.address.toLowerCase() ||
-    (decision === 'approved' && event.args.amount !== BigInt(task.reward_per_completion))
+    event.args.reviewer.toLowerCase() !== verified.address.toLowerCase()
   ) {
     return NextResponse.json({ error: 'Review transaction does not match this submission.' }, { status: 400 });
   }
