@@ -18,6 +18,7 @@ import {
   formatUnits,
   getAddress,
   keccak256,
+  parseAbiItem,
   parseUnits,
   stringToHex,
   type Address,
@@ -245,15 +246,13 @@ async function loadGames(
     const [created, joined] = await Promise.all([
       publicClient.getLogs({
         address: contractAddress,
-        eventName: 'GameCreated',
-        abi: ROCK_PAPER_SCISSORS_ABI,
+        event: parseAbiItem('event GameCreated(bytes32 indexed gameId, address indexed creator, uint256 stake)'),
         fromBlock: start,
         toBlock: end,
       }),
       publicClient.getLogs({
         address: contractAddress,
-        eventName: 'GameJoined',
-        abi: ROCK_PAPER_SCISSORS_ABI,
+        event: parseAbiItem('event GameJoined(bytes32 indexed gameId, address indexed opponent)'),
         args: { opponent: account },
         fromBlock: start,
         toBlock: end,
