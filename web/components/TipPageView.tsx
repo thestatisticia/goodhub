@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { ArrowRight, Check, ExternalLink, Loader2, BadgeCheck, Wallet } from 'lucide-react';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useAccount, useConnect } from 'wagmi';
 import { useSendTip } from '@/hooks/useSendTip';
 import { useGDollarBalance } from '@/hooks/useGDollarBalance';
+import { getWalletConnectionErrorMessage } from '@/lib/walletErrors';
 import type { Creator, Tip } from '@/providers/CreatorProvider';
 
 interface TipPageViewProps {
@@ -19,9 +20,10 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
   const [senderName, setSenderName] = useState('');
 
   const { sendTip, status, txHash, error: tipError, reset: resetTip } = useSendTip();
-  const { ready, authenticated, login } = usePrivy();
-  const { wallets } = useWallets();
-  const senderWallet = (wallets[0]?.address ?? '') as `0x${string}` | '';
+  const { isConnected, address } = useAccount();
+  const { connectAsync, connectors, isPending: isConnecting } = useConnect();
+  const [connectError, setConnectError] = useState('');
+  const senderWallet = address ?? '';
   const { balance: walletBalance, isLoading: balanceLoading } = useGDollarBalance(senderWallet || undefined);
 
   const isSending = status === 'approving' || status === 'approved' || status === 'sending';
@@ -68,6 +70,21 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
     }
   };
 
+  const handleConnectWallet = async () => {
+    const metaMask = connectors[0];
+    if (!metaMask) {
+      setConnectError('MetaMask is not available. Install the MetaMask browser extension and try again.');
+      return;
+    }
+
+    setConnectError('');
+    try {
+      await connectAsync({ connector: metaMask, chainId: 42220 });
+    } catch (error) {
+      setConnectError(getWalletConnectionErrorMessage(error));
+    }
+  };
+
   const resetForm = () => {
     resetTip();
     setMessage('');
@@ -91,7 +108,9 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
               <h2 className="font-display text-xl font-bold tracking-tight">
                 {creatorInfo.name || 'Creator'}
               </h2>
-              <BadgeCheck size={16} className="text-success" />
+              {creatorInfo.gooddollar_verified && (
+                <BadgeCheck size={16} className="text-success" aria-label="GoodDollar verified creator" />
+              )}
             </div>
             <p className="font-mono text-xs text-muted-foreground">@{creatorInfo.username || 'username'}</p>
             {creatorInfo.bio && (
@@ -122,7 +141,7 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
                 <button
                   type="button"
                   onClick={handleSetMax}
-                  disabled={!authenticated || walletBalance == null || walletBalance <= 0}
+                  disabled={!isConnected || walletBalance == null || walletBalance <= 0}
                   className="h-10 rounded-lg border border-line bg-card px-3 text-xs font-semibold transition-colors hover:border-foreground/30 disabled:opacity-40"
                 >
                   Max
@@ -160,7 +179,13 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
               </p>
             )}
 
-            {authenticated ? (
+            {connectError && (
+              <p role="alert" className="rounded-lg bg-danger-bg px-3.5 py-2.5 text-center text-xs font-medium text-danger">
+                {connectError}
+              </p>
+            )}
+
+            {isConnected ? (
               <button
                 type="submit"
                 disabled={activeAmount <= 0 || isSending}
@@ -175,12 +200,12 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
             ) : (
               <button
                 type="button"
-                onClick={login}
-                disabled={!ready}
+                onClick={handleConnectWallet}
+                disabled={isConnecting}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 <Wallet size={16} />
-                Connect wallet to tip
+                {isConnecting ? 'Connecting…' : 'Connect MetaMask to tip'}
               </button>
             )}
           </form>
