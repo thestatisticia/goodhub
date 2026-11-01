@@ -358,7 +358,7 @@ export default function TasksPage() {
         }
       }
       const proofStoragePath = proofFile ? await uploadScreenshot(proofTask, proofFile) : '';
-      let reservationTxHash = '';
+      let reservationTxHash: Hex | '' = '';
       if (submissionState === 0) {
         reservationTxHash = await writeContractAsync({
           address: ESCROW_ADDRESS,
