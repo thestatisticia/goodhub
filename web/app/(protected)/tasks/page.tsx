@@ -87,22 +87,45 @@ export default function TasksPage() {
       if (!proofTask || !address || !publicClient || !ESCROW_ADDRESS) {
         throw new Error('Connect a wallet to estimate the Celo transaction fee.');
       }
-      const [gasLimit, gasPrice, balance] = await Promise.all([
-        publicClient.estimateContractGas({
-          address: ESCROW_ADDRESS,
-          abi: TASK_ESCROW_ABI,
-          functionName: 'reserveSubmission',
-          args: [proofTask.escrow_task_id],
-          account: address,
-        }),
-        publicClient.getGasPrice(),
-        publicClient.getBalance({ address }),
-      ]);
-      const fee = gasLimit * gasPrice;
-      return {
-        fee: fee.toString(),
-        balance: balance.toString(),
-      };
+      try {
+        const [submissionState, balance] = await Promise.all([
+          publicClient.readContract({
+            address: ESCROW_ADDRESS,
+            abi: TASK_ESCROW_ABI,
+            functionName: 'submissionState',
+            args: [proofTask.escrow_task_id, address],
+          }),
+          publicClient.getBalance({ address }),
+        ]);
+        if (submissionState === 1) {
+          return { fee: '0', balance: balance.toString(), alreadyReserved: true };
+        }
+        if (submissionState === 2) {
+          throw new Error('This task is already completed by your wallet.');
+        }
+        const [gasLimit, gasPrice] = await Promise.all([
+          publicClient.estimateContractGas({
+            address: ESCROW_ADDRESS,
+            abi: TASK_ESCROW_ABI,
+            functionName: 'reserveSubmission',
+            args: [proofTask.escrow_task_id],
+            account: address,
+          }),
+          publicClient.getGasPrice(),
+        ]);
+        const fee = gasLimit * gasPrice;
+        return {
+          fee: fee.toString(),
+          balance: balance.toString(),
+          alreadyReserved: false,
+        };
+      } catch (estimateError) {
+        console.error('Task reservation fee estimate failed:', estimateError);
+        if (estimateError instanceof Error && estimateError.message === 'This task is already completed by your wallet.') {
+          throw estimateError;
+        }
+        throw new Error('Fee estimate is unavailable. Check your Celo connection and retry.');
+      }
     },
   });
 
@@ -318,7 +341,16 @@ export default function TasksPage() {
     try {
       await ensureCelo();
       await responseJson(await fetch(`/api/tasks?taskId=${encodeURIComponent(proofTask.id)}`));
-      if (gasEstimateQuery.data) {
+      const submissionState = await publicClient.readContract({
+        address: ESCROW_ADDRESS,
+        abi: TASK_ESCROW_ABI,
+        functionName: 'submissionState',
+        args: [proofTask.escrow_task_id, address],
+      });
+      if (submissionState === 2) {
+        throw new Error('This task is already completed by your wallet.');
+      }
+      if (submissionState === 0 && gasEstimateQuery.data && !gasEstimateQuery.data.alreadyReserved) {
         const estimatedFee = BigInt(gasEstimateQuery.data.fee);
         const availableBalance = BigInt(gasEstimateQuery.data.balance);
         if (availableBalance < estimatedFee) {
@@ -326,14 +358,17 @@ export default function TasksPage() {
         }
       }
       const proofStoragePath = proofFile ? await uploadScreenshot(proofTask, proofFile) : '';
-      const reservationTxHash = await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: TASK_ESCROW_ABI,
-        functionName: 'reserveSubmission',
-        args: [proofTask.escrow_task_id],
-        chainId: 42220,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: reservationTxHash });
+      let reservationTxHash = '';
+      if (submissionState === 0) {
+        reservationTxHash = await writeContractAsync({
+          address: ESCROW_ADDRESS,
+          abi: TASK_ESCROW_ABI,
+          functionName: 'reserveSubmission',
+          args: [proofTask.escrow_task_id],
+          chainId: 42220,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: reservationTxHash });
+      }
 
       const payload = {
         taskId: proofTask.id,
@@ -488,13 +523,17 @@ export default function TasksPage() {
               {gasEstimateQuery.isPending
                 ? 'checking…'
                 : gasEstimateQuery.data
-                  ? `${formatUnits(BigInt(gasEstimateQuery.data.fee), 18)} CELO`
+                  ? gasEstimateQuery.data.alreadyReserved
+                    ? 'Reservation already confirmed; no new reservation transaction is needed.'
+                    : `${formatUnits(BigInt(gasEstimateQuery.data.fee), 18)} CELO`
                   : 'not available yet. MetaMask will show the fee before you confirm.'}
               {' '}The displayed estimate can change; MetaMask shows the final fee. Rejecting the wallet prompt does not submit a transaction or charge gas.
             </p>
             {gasEstimateQuery.error && (
               <p role="alert" className="rounded-lg bg-danger-bg p-3 text-sm text-danger">
-                Could not estimate this task reservation’s Celo fee: {gasEstimateQuery.error.message}. Check that your wallet is on Celo and retry the estimate before submitting.
+                {gasEstimateQuery.error.message === 'This task is already completed by your wallet.'
+                  ? gasEstimateQuery.error.message
+                  : 'The fee estimate is unavailable. Check your Celo connection; MetaMask will show the fee before you approve.'}
                 <button type="button" onClick={() => void gasEstimateQuery.refetch()} className="ml-2 font-semibold underline">Retry estimate</button>
               </p>
             )}

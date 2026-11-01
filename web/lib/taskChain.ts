@@ -40,6 +40,16 @@ export const TASK_ESCROW_ABI = [
   },
   {
     type: 'function',
+    name: 'submissionState',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'taskId', type: 'bytes32' },
+      { name: 'worker', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
     name: 'approveSubmission',
     stateMutability: 'nonpayable',
     inputs: [
@@ -145,6 +155,29 @@ export async function getTaskReceipt(
   } catch (error) {
     console.error('Task escrow receipt lookup failed:', error);
     return NextResponse.json({ error: 'Could not verify the escrow transaction on Celo.' }, { status: 503 });
+  }
+}
+
+export async function getTaskSubmissionState(taskId: `0x${string}`, worker: `0x${string}`) {
+  const escrowAddress = getTaskEscrowAddress();
+  if (!escrowAddress) {
+    return NextResponse.json({ error: 'Task escrow contract is not configured.' }, { status: 503 });
+  }
+
+  try {
+    const publicClient = createPublicClient({
+      chain: celo,
+      transport: http(process.env.GOODDOLLAR_RPC_URL || 'https://forno.celo.org'),
+    });
+    return await publicClient.readContract({
+      address: escrowAddress,
+      abi: TASK_ESCROW_ABI,
+      functionName: 'submissionState',
+      args: [taskId, worker],
+    });
+  } catch (error) {
+    console.error('Task submission state lookup failed:', error);
+    return NextResponse.json({ error: 'Could not verify your task reservation on Celo.' }, { status: 503 });
   }
 }
 

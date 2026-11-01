@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { findTaskEvent, getTaskReceipt } from '@/lib/taskChain';
+import { findTaskEvent, getTaskReceipt, getTaskSubmissionState } from '@/lib/taskChain';
 import { isAuthFailure, verifyTaskAuth, type TaskAuth } from '@/lib/taskSecurity';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -61,15 +61,28 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const receipt = await getTaskReceipt(reservationTxHash, verified.address);
-  if (receipt instanceof NextResponse) return receipt;
-  const event = findTaskEvent(receipt.logs, 'SubmissionReserved');
-  if (
-    !event || event.eventName !== 'SubmissionReserved' ||
-    event.args.taskId.toLowerCase() !== task.escrow_task_id.toLowerCase() ||
-    event.args.worker.toLowerCase() !== verified.address.toLowerCase()
-  ) {
-    return NextResponse.json({ error: 'Reservation transaction does not match this task and wallet.' }, { status: 400 });
+  let storedReservationTxHash: string | null = reservationTxHash || null;
+  if (reservationTxHash) {
+    const receipt = await getTaskReceipt(reservationTxHash, verified.address);
+    if (receipt instanceof NextResponse) return receipt;
+    const event = findTaskEvent(receipt.logs, 'SubmissionReserved');
+    if (
+      !event || event.eventName !== 'SubmissionReserved' ||
+      event.args.taskId.toLowerCase() !== task.escrow_task_id.toLowerCase() ||
+      event.args.worker.toLowerCase() !== verified.address.toLowerCase()
+    ) {
+      return NextResponse.json({ error: 'Reservation transaction does not match this task and wallet.' }, { status: 400 });
+    }
+    storedReservationTxHash = reservationTxHash.toLowerCase();
+  } else {
+    const submissionState = await getTaskSubmissionState(
+      task.escrow_task_id as `0x${string}`,
+      verified.address,
+    );
+    if (submissionState instanceof NextResponse) return submissionState;
+    if (submissionState !== 1) {
+      return NextResponse.json({ error: 'Reserve this task before submitting proof.' }, { status: 409 });
+    }
   }
 
   const submission = {
@@ -78,7 +91,7 @@ export async function POST(request: NextRequest) {
     proof_text: proofText.trim(),
     proof_url: proofUrl.trim(),
     proof_storage_path: proofStoragePath,
-    reservation_tx_hash: reservationTxHash.toLowerCase(),
+    reservation_tx_hash: storedReservationTxHash,
     status: 'pending',
     review_note: '',
     review_tx_hash: null,
@@ -101,6 +114,11 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.from('tipjar_task_submissions').insert(submission).select().single();
   if (error) {
+    if (error.code === '23502' && !storedReservationTxHash) {
+      return NextResponse.json({
+        error: 'Task reservation recovery needs the latest Supabase migration. Apply 202611020001_task_reservation_recovery.sql.',
+      }, { status: 503 });
+    }
     if (error.code === '23505') {
       return NextResponse.json({ error: 'A submission for this task is already awaiting review or has been paid.' }, { status: 409 });
     }
