@@ -33,7 +33,6 @@ interface Task {
 interface MySubmission {
   id: string;
   status: 'pending' | 'approved' | 'rejected';
-  review_note: string;
   task: Pick<Task, 'id' | 'title' | 'reward_per_completion' | 'status' | 'expires_at'>;
 }
 
@@ -135,17 +134,14 @@ export default function TasksPage() {
       setMyCreatedTasks([]);
       return;
     }
-    const payload = {};
-    const auth = await signTaskRequest('POST', '/api/tasks/my-submissions', payload);
-    const result = await responseJson(await fetch('/api/tasks/my-submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ auth }),
-    })) as MyTasksResult;
+    const result = await responseJson(await fetch(
+      `/api/tasks/my-submissions?wallet=${encodeURIComponent(address)}`,
+      { cache: 'no-store' },
+    )) as MyTasksResult;
     setMySubmissions(result.submissions);
     setMyCreatedTasks(result.createdTasks);
     setMyTasksLoaded(true);
-  }, [address, signTaskRequest]);
+  }, [address]);
 
   useEffect(() => {
     const syncHashView = () => {
@@ -642,7 +638,6 @@ export default function TasksPage() {
                 <div>
                   <p className="text-sm font-semibold">{submission.task.title}</p>
                   {submission.status === 'approved' && <p className="mt-1 text-xs font-semibold text-success">Approved · {formatUnits(BigInt(submission.task.reward_per_completion), 18)} G$ paid</p>}
-                  {submission.review_note && <p className="mt-1 text-sm text-muted-foreground">Reviewer note: {submission.review_note}</p>}
                 </div>
                 <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold capitalize">{submission.status}</span>
               </article>

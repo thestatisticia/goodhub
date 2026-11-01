@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { isAuthFailure, verifyTaskAuth, type TaskAuth } from '@/lib/taskSecurity';
+import { getAddress, isAddress } from 'viem';
 
-export async function POST(request: NextRequest) {
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+export async function GET(request: NextRequest) {
+  const requestedWallet = request.nextUrl.searchParams.get('wallet');
+  if (!requestedWallet || !isAddress(requestedWallet)) {
+    return NextResponse.json({ error: 'A valid wallet address is required.' }, { status: 400 });
   }
-  const auth = body.auth as TaskAuth | undefined;
-  const verified = await verifyTaskAuth(auth, 'POST', '/api/tasks/my-submissions', body);
-  if (isAuthFailure(verified)) return verified;
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'Task storage is not configured on the server.' }, { status: 503 });
+  }
 
   const supabase = createServerSupabaseClient();
-  const wallet = verified.address.toLowerCase();
+  const wallet = getAddress(requestedWallet).toLowerCase();
   const [{ data: submissions, error }, { data: createdTasks, error: tasksError }] = await Promise.all([
     supabase
-    .from('tipjar_task_submissions')
-    .select('id,task_id,status,review_note,review_tx_hash,created_at')
-    .eq('worker_address', wallet)
-    .order('updated_at', { ascending: false })
-    .limit(100),
+      .from('tipjar_task_submissions')
+      .select('id,task_id,status,created_at')
+      .eq('worker_address', wallet)
+      .order('updated_at', { ascending: false })
+      .limit(100),
     supabase
       .from('tipjar_tasks')
       .select('id,escrow_task_id,creator_address,title,description,requirements,reward_per_completion,slots,status,created_at,duration_days,expires_at')
@@ -71,5 +69,8 @@ export async function POST(request: NextRequest) {
     total_slots: task.slots,
     claimed_slots: claimedByTask.get(task.id) || 0,
   }));
-  return NextResponse.json({ submissions: results, createdTasks: taskResults });
+  return NextResponse.json(
+    { submissions: results, createdTasks: taskResults },
+    { headers: { 'Cache-Control': 'private, no-store' } },
+  );
 }
