@@ -160,6 +160,14 @@ export default function TasksPage() {
     };
   }, [loadMyTasks]);
 
+  useEffect(() => {
+    if (!tasksQuery.data || !window.location.hash.startsWith('#task-')) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [tasksQuery.data]);
+
   const openTasks = useMemo(() => tasks.filter((task) => task.status === 'open'), [tasks]);
 
   const ensureCelo = async () => {
@@ -596,7 +604,7 @@ export default function TasksPage() {
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {openTasks.map((task) => (
-              <article key={task.id} className="rounded-2xl border border-line bg-card p-5">
+              <article id={`task-${task.id}`} key={task.id} className="scroll-mt-24 rounded-2xl border border-line bg-card p-5">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-display text-lg font-bold">{task.title}</h3>
                   <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 font-mono text-xs font-bold text-accent-foreground">

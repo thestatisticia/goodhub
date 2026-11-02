@@ -7,11 +7,16 @@ export default function GoodHubLogo({ className = '' }: GoodHubLogoProps) {
     <span
       role="img"
       aria-label="GOODHUB"
-      className={`inline-flex h-9 items-center gap-0.5 rounded-md bg-[#080808] px-2.5 font-display text-[17px] font-extrabold leading-none tracking-[-0.08em] text-white ${className}`}
+      className={`inline-flex h-9 items-center gap-2 font-display text-[17px] font-extrabold leading-none tracking-[-0.06em] text-foreground ${className}`}
     >
-      <span aria-hidden="true">GO</span>
-      <span aria-hidden="true" className="mx-0.5 inline-block h-[0.72em] w-[0.72em] rounded-full bg-[#ff8a3d]" />
-      <span aria-hidden="true">DHUB</span>
+      <svg aria-hidden="true" viewBox="0 0 32 32" className="h-8 w-8 shrink-0">
+        <rect width="32" height="32" rx="10" fill="#e7f52c" />
+        <path
+          d="M23.4 10.1A9 9 0 1 0 25 17h-9v-3h12v3.2A12 12 0 1 1 25.8 8Z"
+          fill="#10264a"
+        />
+      </svg>
+      <span>GOODHUB</span>
     </span>
   );
 }

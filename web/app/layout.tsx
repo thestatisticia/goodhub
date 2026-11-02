@@ -6,6 +6,7 @@ import Web3Provider from '@/providers/Web3Provider';
 export const metadata: Metadata = {
   title: 'GOODHUB — Community rewards on Celo',
   description: 'Discover opportunities, participate, earn G$, and support creators with GOODHUB.',
+  icons: { icon: '/icon.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

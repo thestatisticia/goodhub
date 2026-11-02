@@ -29,6 +29,8 @@ interface DashboardOpportunity {
   reward: string;
   kind: 'task' | 'campaign';
   availableCount: number;
+  creatorAddress: string;
+  expiresAt: string | null;
 }
 
 async function loadDashboardOpportunities(): Promise<DashboardOpportunity[]> {
@@ -41,7 +43,7 @@ async function loadDashboardOpportunities(): Promise<DashboardOpportunity[]> {
     throw new Error(tasks.error || campaigns.error || 'Could not load opportunities.');
   }
   return [
-    ...(tasks as Array<{ id: string; title: string; description: string; reward_per_completion: string; slots: number }>)
+    ...(tasks as Array<{ id: string; title: string; description: string; reward_per_completion: string; slots: number; creator_address: string; expires_at: string | null }>)
       .slice(0, 2)
       .map((task) => ({
         id: `task-${task.id}`,
@@ -50,8 +52,10 @@ async function loadDashboardOpportunities(): Promise<DashboardOpportunity[]> {
         reward: task.reward_per_completion,
         kind: 'task' as const,
         availableCount: task.slots,
+        creatorAddress: task.creator_address,
+        expiresAt: task.expires_at,
       })),
-    ...(campaigns as Array<{ id: string; title: string; description: string; reward_per_participant: string; available_participants: number }>)
+    ...(campaigns as Array<{ id: string; title: string; description: string; reward_per_participant: string; available_participants: number; creator_address: string; expires_at: string | null }>)
       .slice(0, 2)
       .map((campaign) => ({
         id: `campaign-${campaign.id}`,
@@ -60,6 +64,8 @@ async function loadDashboardOpportunities(): Promise<DashboardOpportunity[]> {
         reward: campaign.reward_per_participant,
         kind: 'campaign' as const,
         availableCount: campaign.available_participants,
+        creatorAddress: campaign.creator_address,
+        expiresAt: campaign.expires_at,
       })),
   ].slice(0, 3);
 }
@@ -78,6 +84,13 @@ function formatActivityDate(value: string) {
   return Number.isNaN(date.getTime())
     ? 'Date unavailable'
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function formatDeadline(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
 }
 
 function activityStatusClass(status: string) {
@@ -209,15 +222,17 @@ export default function DashboardHome() {
       <div>
         <div>
           <h2 className="font-display text-2xl font-bold tracking-tight">
-            {creatorLoading ? 'Welcome' : creator.name ? `Welcome back, ${creator.name.split(' ')[0]}` : 'Welcome to GOODHUB'}
+            {creatorLoading ? 'Welcome' : creator.name.trim() ? `Welcome back, ${creator.name.trim().split(/\s+/)[0]}` : 'Welcome to GOODHUB'}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Find opportunities, follow your rewards, and stay up to date.
+            {creator.name.trim()
+              ? 'Here’s what’s happening in your Good Hub account today.'
+              : 'Find opportunities, follow your rewards, and stay up to date.'}
           </p>
         </div>
       </div>
 
-      <section className="rounded-xl border border-line bg-card p-5">
+      {!creator.username && <section className="rounded-xl border border-line bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Creator profile</p>
@@ -261,26 +276,58 @@ export default function DashboardHome() {
             </div>
           ))}
         </div>
-      </section>
+      </section>}
+      {creator.username && (
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-card px-5 py-4">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Your creator profile</p>
+            <p className="mt-1 truncate font-display text-lg font-bold">{creator.name || `@${creator.username}`}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {creatorLoading || tipStatsError
+                ? 'Account activity is temporarily unavailable.'
+                : `${tipStats.receivedCount} tips received`}
+              {!creatorStatsQuery.isPending && !creatorStatsQuery.isError
+                ? ` · ${creatorStatsQuery.data.approvedPosts} campaign posts approved`
+                : ''}
+              {!spinStatusQuery.isPending && !spinStatusQuery.isError
+                ? ` · ${spinStatusQuery.data.availableSpins.length} available spins`
+                : ''}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href={`/tip/${creator.username}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold transition-colors hover:bg-muted">
+              View page <ArrowUpRight size={14} />
+            </Link>
+            <Link href="/settings" className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+              Edit profile
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section id="wallet" className="scroll-mt-24">
         <div className="mb-3">
           <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financial overview</p>
           <h3 className="mt-1 font-display text-lg font-bold">Your G$ activity</h3>
         </div>
-        <div className="grid grid-cols-4 gap-3 max-lg:grid-cols-2">
-          <article className="rounded-xl border border-line bg-card p-4">
+        <div className="grid grid-cols-6 gap-3 max-lg:grid-cols-2">
+          <article className="col-span-3 rounded-xl border border-accent/70 bg-accent/15 p-5 max-lg:col-span-2">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Wallet size={14} /> Wallet balance</div>
-            <p className="mt-2 font-display text-2xl font-bold tracking-tight">
+            <p className="mt-2 font-display text-3xl font-bold tracking-tight">
               {balanceLoading ? '…' : balanceError ? 'Unavailable' : (gBalance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
               <span className="ml-1 text-sm font-medium text-muted-foreground">G$</span>
             </p>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Spendable in your wallet</span>
-              <button type="button" onClick={() => setWithdrawOpen(true)} disabled={balanceError || gBalance == null} className="text-xs font-bold text-primary disabled:opacity-40">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Spendable wallet funds</span>
+              <button type="button" onClick={() => setWithdrawOpen(true)} disabled={balanceError || gBalance == null} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40">
                 Send G$
               </button>
             </div>
+            {!balanceLoading && !balanceError && gBalance === 0 && (
+              <p className="mt-3 border-t border-line/70 pt-3 text-xs leading-relaxed text-muted-foreground">
+                Your wallet is ready. <Link href="/share" className="font-semibold text-primary underline-offset-2 hover:underline">Share your page</Link> to receive G$ tips.
+              </p>
+            )}
             {balanceError && <button type="button" onClick={() => void refetchBalance()} className="mt-2 text-xs font-semibold text-danger">Retry balance</button>}
           </article>
           <article className="rounded-xl border border-line bg-card p-4">
@@ -289,7 +336,9 @@ export default function DashboardHome() {
               {creatorStatsQuery.isPending ? '…' : creatorStatsQuery.isError ? 'Unavailable' : (pendingRewards ?? 0).toLocaleString()}
               <span className="ml-1 text-sm font-medium text-muted-foreground">G$</span>
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">Spin awards awaiting payment</p>
+            <Link href="#activity" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+              View payout activity <ArrowRight size={12} />
+            </Link>
           </article>
           <article className="rounded-xl border border-line bg-card p-4">
             <p className="text-xs font-medium text-muted-foreground">Historical earnings</p>
@@ -297,7 +346,9 @@ export default function DashboardHome() {
               {creatorLoading || creatorStatsQuery.isPending ? '…' : creatorStatsQuery.isError || tipStatsError ? 'Unavailable' : (historicalEarnings ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
               <span className="ml-1 text-sm font-medium text-muted-foreground">G$</span>
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">Past tips and approved rewards, not wallet funds</p>
+            <Link href="#ledger" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+              View earnings history <ArrowRight size={12} />
+            </Link>
           </article>
           <article className="rounded-xl border border-line bg-card p-4">
             <p className="text-xs font-medium text-muted-foreground">Available spins</p>
@@ -308,9 +359,12 @@ export default function DashboardHome() {
               <span className="text-xs text-muted-foreground">Eligible spins</span>
               <Link href="/spin" className="text-xs font-bold text-primary">Open rewards</Link>
             </div>
+            {!spinStatusQuery.isPending && !spinStatusQuery.isError && spinStatusQuery.data.availableSpins.length === 0 && (
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">No eligible spins right now. Visit rewards to check current ways to earn one.</p>
+            )}
           </article>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line bg-card px-4 py-3 text-xs">
+        <div id="earnings-breakdown" className="mt-3 flex scroll-mt-24 flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line bg-card px-4 py-3 text-xs">
           <span className="font-semibold text-muted-foreground">Historical breakdown</span>
           <span>Tips: {creatorLoading ? '…' : tipStatsError ? 'Unavailable' : tipStats.totalReceived.toLocaleString()} G$</span>
           <span>Tasks: {creatorStatsQuery.isPending ? '…' : creatorStatsQuery.isError ? 'Unavailable' : formatAmount(creatorStatsQuery.data.taskEarnings)} G$</span>
@@ -380,29 +434,34 @@ export default function DashboardHome() {
           </div>
         ) : opportunitiesQuery.data.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line bg-card p-6 text-sm text-muted-foreground">
-            No open tasks or campaigns right now. Check back soon or explore creator pages.
+            No open tasks or campaigns right now. <Link href="/tasks" className="font-semibold text-primary hover:underline">Browse tasks</Link> or <Link href="/campaigns" className="font-semibold text-primary hover:underline">campaigns</Link> again soon.
           </p>
         ) : (
           <div className="grid gap-3 md:grid-cols-3">
             {opportunitiesQuery.data.map((opportunity) => {
               const isTask = opportunity.kind === 'task';
               const reward = formatAmount(opportunity.reward);
+              const deadline = formatDeadline(opportunity.expiresAt);
+              const opportunityId = opportunity.id.slice(isTask ? 'task-'.length : 'campaign-'.length);
               return (
-                <article key={opportunity.id} className="rounded-xl border border-line bg-card p-4">
+                <article key={opportunity.id} className="group flex h-full flex-col rounded-xl border border-line bg-card p-5 transition duration-200 hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md motion-reduce:transform-none">
                   <div className="flex items-center justify-between gap-3">
                     <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                       {isTask ? 'Task' : 'Campaign'}
                     </span>
-                    <span className="font-mono text-xs font-bold">{reward} G$</span>
+                    <span className="rounded-lg bg-accent px-2.5 py-1 font-mono text-sm font-bold text-accent-foreground">{reward} G$</span>
                   </div>
-                  <h4 className="mt-3 line-clamp-1 font-display text-base font-bold">{opportunity.title}</h4>
-                  <p className="mt-1 line-clamp-2 min-h-10 text-xs leading-relaxed text-muted-foreground">{opportunity.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                  <h4 className="mt-4 line-clamp-2 min-h-12 font-display text-lg font-bold leading-snug">{opportunity.title}</h4>
+                  <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-muted-foreground">{opportunity.description}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Posted by <span className="font-mono font-medium text-foreground">{opportunity.creatorAddress ? `${opportunity.creatorAddress.slice(0, 6)}…${opportunity.creatorAddress.slice(-4)}` : 'creator details unavailable'}</span>
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
                     <span>{opportunity.availableCount} {isTask ? 'slots' : 'spots'} available</span>
-                    <span className="inline-flex items-center gap-1"><Clock3 size={12} /> No time estimate listed</span>
+                    {deadline && <span className="inline-flex items-center gap-1"><Clock3 size={12} /> Due {deadline}</span>}
                   </div>
-                  <Link href={isTask ? '/tasks' : '/campaigns'} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
-                    View {isTask ? 'task' : 'campaign'} <ArrowRight size={13} />
+                  <Link href={isTask ? `/tasks#task-${opportunityId}` : `/campaigns#campaign-${opportunityId}`} className="mt-auto inline-flex items-center gap-1 pt-5 text-sm font-semibold text-primary hover:underline">
+                    View details <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                   </Link>
                 </article>
               );
@@ -411,7 +470,7 @@ export default function DashboardHome() {
         )}
       </section>
 
-      <section className="rounded-xl border border-line bg-card p-5">
+      <section id="activity" className="scroll-mt-24 rounded-xl border border-line bg-card p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Updates</p>
@@ -438,11 +497,11 @@ export default function DashboardHome() {
           </p>
         ) : !activityQuery.data ? (
           <p className="rounded-lg border border-dashed border-line p-5 text-sm text-muted-foreground">
-            Sign a free wallet message to load your private task, campaign, tip, and reward activity. No transaction is sent.
+            Load task, campaign, tip, and reward updates associated with your wallet using the button above. It requests a free message signature and does not send a transaction.
           </p>
         ) : activityQuery.data.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line p-5 text-sm text-muted-foreground">
-            No account activity yet. Task submissions, campaign updates, tips, and spin results will appear here.
+            No account activity yet. <Link href="/tasks" className="font-semibold text-primary hover:underline">Explore tasks</Link> or <Link href="/campaigns" className="font-semibold text-primary hover:underline">join a campaign</Link> to get started.
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -452,6 +511,11 @@ export default function DashboardHome() {
                   <p className="text-sm font-semibold">{event.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{event.description}</p>
                   <time dateTime={event.createdAt} className="mt-1 block text-[11px] text-muted-foreground">{formatActivityDate(event.createdAt)}</time>
+                  {event.transactionHash && (
+                    <a href={`https://celoscan.io/tx/${event.transactionHash}`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline">
+                      Tx {event.transactionHash.slice(0, 8)}…{event.transactionHash.slice(-4)} <ArrowUpRight size={10} />
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {event.amount && <span className="font-mono text-xs font-semibold">{event.category === 'tip' ? Number(event.amount).toLocaleString() : formatAmount(event.amount, event.category === 'spin' ? 0 : 18)} G$</span>}
@@ -464,7 +528,7 @@ export default function DashboardHome() {
       </section>
 
       {/* Creator support activity */}
-      <section className="rounded-xl border border-line bg-card p-6">
+      <section id="ledger" className="scroll-mt-24 rounded-xl border border-line bg-card p-6">
         <div className="mb-4 flex items-center justify-between gap-2.5">
           <MessageSquare size={17} className="text-muted-foreground" />
           <h3 className="font-display text-[15px] font-semibold">Creator support activity</h3>

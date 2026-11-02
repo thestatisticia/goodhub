@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatUnits, keccak256, maxUint256, parseUnits, stringToHex, type Hex } from 'viem';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi';
@@ -83,6 +83,14 @@ export default function CampaignsPage() {
     () => campaigns.filter((campaign) => campaign.creator_address.toLowerCase() !== address?.toLowerCase()),
     [campaigns, address],
   );
+
+  useEffect(() => {
+    if (!campaignsQuery.data || !window.location.hash.startsWith('#campaign-')) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [campaignsQuery.data]);
 
   const refreshCampaigns = async () => { await campaignsQuery.refetch(); };
   const ensureCelo = async () => {
@@ -415,7 +423,7 @@ export default function CampaignsPage() {
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {publicCampaigns.map((campaign) => (
-              <article key={campaign.id} className="rounded-2xl border border-line bg-card p-5">
+              <article id={`campaign-${campaign.id}`} key={campaign.id} className="scroll-mt-24 rounded-2xl border border-line bg-card p-5">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-display text-lg font-bold">{campaign.title}</h3>
                   <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 font-mono text-xs font-bold text-accent-foreground">{formatG(campaign.reward_per_participant)}</span>
