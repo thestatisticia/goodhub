@@ -6,6 +6,7 @@ import { Activity, CircleAlert } from 'lucide-react';
 interface ActivityItem {
   id: string;
   message: string;
+  isSample?: boolean;
 }
 
 export default function ActivityTicker() {
@@ -134,6 +135,11 @@ export default function ActivityTicker() {
                       className="mx-6 inline-flex items-center gap-2 whitespace-nowrap text-xs text-foreground/85"
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                      {item.isSample && (
+                        <span className="rounded-full border border-accent/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent">
+                          Sample
+                        </span>
+                      )}
                       {item.message}
                     </span>
                   ))}

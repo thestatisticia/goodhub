@@ -6,7 +6,51 @@ interface ActivityItem {
   id: string;
   createdAt: string;
   message: string;
+  isSample?: boolean;
 }
+
+const SAMPLE_ACTIVITY: Omit<ActivityItem, 'createdAt'>[] = [
+  {
+    id: 'sample:task-approved',
+    message: 'A community task was approved · participant earned 10 G$',
+    isSample: true,
+  },
+  {
+    id: 'sample:campaign-published',
+    message: 'A new campaign was published for the community',
+    isSample: true,
+  },
+  {
+    id: 'sample:creator-supported',
+    message: 'A creator received support from a community fan',
+    isSample: true,
+  },
+  {
+    id: 'sample:participant-rewarded',
+    message: 'A participant earned 25 G$ for completing an opportunity',
+    isSample: true,
+  },
+  {
+    id: 'sample:campaign-completed',
+    message: 'A campaign participant completed their contribution',
+    isSample: true,
+  },
+  {
+    id: 'sample:daily-reward',
+    message: 'A community member claimed a daily reward',
+    isSample: true,
+  },
+  {
+    id: 'sample:creator-joined',
+    message: 'A new creator joined the GOODHUB community',
+    isSample: true,
+  },
+  {
+    id: 'sample:task-published',
+    message: 'A creator published a new community task',
+    isSample: true,
+  },
+];
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -118,6 +162,17 @@ export async function GET() {
         createdAt: tip.created_at,
         message: `A fan supported creator @${tip.creator_username} with a G$ tip`,
       });
+    }
+
+    if (activity.length < 4) {
+      const sampleCount = Math.min(4 - activity.length, SAMPLE_ACTIVITY.length);
+      const sampleTime = Date.now();
+      activity.push(
+        ...SAMPLE_ACTIVITY.slice(0, sampleCount).map((item, index) => ({
+          ...item,
+          createdAt: new Date(sampleTime - index * 60_000).toISOString(),
+        })),
+      );
     }
 
     activity.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
