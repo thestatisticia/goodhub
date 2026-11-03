@@ -83,6 +83,20 @@
   }
 }
 
+.landing-mesh {
+  background-image:
+    radial-gradient(ellipse 680px 420px at 82% 260px, color-mix(in srgb, var(--accent) 12%, transparent), transparent 100%),
+    radial-gradient(ellipse 560px 460px at 8% 1050px, color-mix(in srgb, #72bfb2 12%, transparent), transparent 100%),
+    radial-gradient(ellipse 700px 500px at 72% 2100px, color-mix(in srgb, #8ca4da 10%, transparent), transparent 100%);
+}
+
+.dark .landing-mesh {
+  background-image:
+    radial-gradient(ellipse 680px 420px at 82% 260px, color-mix(in srgb, var(--accent) 10%, transparent), transparent 100%),
+    radial-gradient(ellipse 560px 460px at 8% 1050px, color-mix(in srgb, #287c72 16%, transparent), transparent 100%),
+    radial-gradient(ellipse 700px 500px at 72% 2100px, color-mix(in srgb, #394a7e 17%, transparent), transparent 100%);
+}
+
 .landing-grid {
   background-image:
     linear-gradient(to right, color-mix(in srgb, var(--line) 75%, transparent) 1px, transparent 1px),
@@ -92,9 +106,14 @@
 }
 
 .glass-panel {
-  background: color-mix(in srgb, var(--card) 62%, transparent);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: color-mix(in srgb, var(--card) 52%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 16px 48px rgba(16, 38, 74, 0.08);
+}
+
+.dark .glass-panel {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
 }
 
 /* ─── Base ───────────────────────────────────────────────────── */
@@ -111,6 +130,7 @@ html {
   html {
     scroll-behavior: auto;
   }
+
 }
 
 body {

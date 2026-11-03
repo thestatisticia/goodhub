@@ -8,10 +8,12 @@ import { useTheme } from 'next-themes';
 import { useQuery } from '@tanstack/react-query';
 import { formatUnits } from 'viem';
 import {
-  ArrowRight, ArrowUpRight, Sun, Moon, Heart, Check, Clock3,
+  ArrowRight, ArrowUpRight, Sun, Moon, Heart, Clock3,
   ListTodo, Megaphone, RotateCw, Wallet, Menu, X, Compass, ShieldCheck,
+  Users, Gift, Zap, Globe, Search, CircleCheck,
 } from 'lucide-react';
-import CreatorsLeaderboard from '@/components/CreatorsLeaderboard';
+import CommunityLeaderboard from '@/components/CommunityLeaderboard';
+import ActivityTicker from '@/components/ActivityTicker';
 import GoodHubLogo from '@/components/GoodHubLogo';
 import { getWalletConnectionErrorMessage } from '@/lib/walletErrors';
 
@@ -27,6 +29,13 @@ const STEPS = [
   { n: '02', title: 'Find your next step', desc: 'Complete a task, join a campaign, claim an eligible reward, or support a creator.' },
   { n: '03', title: 'Track your activity', desc: 'See your participation and G$ activity from your personal dashboard.' },
 ];
+
+const APP_NAV_LINKS = [
+  { label: 'Tasks', href: '/tasks' },
+  { label: 'Campaigns', href: '/campaigns' },
+  { label: 'Daily rewards', href: '/spin' },
+  { label: 'Community', href: '/leaderboard' },
+] as const;
 
 interface Opportunity {
   id: string;
@@ -101,6 +110,7 @@ export default function LandingPage() {
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'task' | 'campaign'>('all');
+  const [activeSection, setActiveSection] = useState('');
   const scrolled = useSyncExternalStore(
     subscribeToScroll,
     () => window.scrollY > 8,
@@ -125,6 +135,24 @@ export default function LandingPage() {
     staleTime: 60_000,
   });
 
+  useEffect(() => {
+    const sectionIds = ['#features', '#opportunities', '#creator-types', '#how-it-works', '#leaderboard'];
+    const sections = sectionIds
+      .map((id) => document.querySelector<HTMLElement>(id))
+      .filter((section): section is HTMLElement => section !== null);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleSection = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visibleSection) setActiveSection(`#${visibleSection.target.id}`);
+      },
+      { rootMargin: '-20% 0px -65% 0px' },
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
+
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState('');
 
@@ -139,7 +167,7 @@ export default function LandingPage() {
       return;
     }
 
-    const metaMask = connectors[0];
+    const metaMask = connectors.find((connector) => connector.id === 'metaMask');
     if (!metaMask) {
       setLaunchError('MetaMask is not available. Install the MetaMask browser extension and try again.');
       return;
@@ -156,51 +184,64 @@ export default function LandingPage() {
   }, [isConnected, router, connectors, connectAsync]);
 
   return (
-    <div className="relative min-h-screen overflow-x-clip">
+    <div className="landing-page relative isolate min-h-screen overflow-x-clip">
       <div
         aria-hidden
-        className="landing-grid pointer-events-none absolute inset-x-0 top-16 -z-10 h-[680px] opacity-70"
+        className="landing-mesh pointer-events-none absolute inset-0 z-0"
+      />
+      <div
+        aria-hidden
+        className="landing-grid pointer-events-none absolute inset-x-0 top-16 z-0 h-[760px] opacity-70"
       />
 
+      <div className="relative z-10">
       {/* ─── Navbar ─────────────────────────────────────────── */}
       <header className={`sticky top-0 z-50 border-b transition-colors duration-200 ${
-        scrolled ? 'border-line bg-background/90 shadow-sm backdrop-blur-xl' : 'border-transparent bg-background/70 backdrop-blur-md'
+        scrolled ? 'glass-panel border-line/70 shadow-sm' : 'glass-panel border-transparent'
       }`}>
         <nav className="mx-auto flex h-16 w-full max-w-[min(1680px,94vw)] items-center justify-between px-6 2xl:px-10 max-lg:max-w-6xl max-lg:px-5">
-          <Link href="/" aria-label="GOODHUB home" className="flex items-center">
-            <GoodHubLogo />
-          </Link>
+          <div className="flex items-center gap-10 max-xl:gap-6">
+            <Link href="/" aria-label="GOODHUB home" className="flex shrink-0 items-center">
+              <GoodHubLogo />
+            </Link>
 
-          <div className="flex items-center gap-1 max-md:hidden">
-            {[
-              ['Explore', '#opportunities'],
-              ['What you can do', '#features'],
-              ['How it works', '#how-it-works'],
-              ['Creator spotlight', '#leaderboard'],
-            ].map(([label, href]) => (
+            <div className="flex items-center gap-2 max-lg:hidden">
+              {APP_NAV_LINKS.map(({ label, href }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="rounded-lg border border-transparent px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground"
+                >
+                  {label}
+                </Link>
+              ))}
               <a
-                key={href}
-                href={href}
-                className="rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                href="#how-it-works"
+                aria-current={activeSection === '#how-it-works' ? 'location' : undefined}
+                className="rounded-lg border border-transparent px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground"
               >
-                {label}
+                How it works
               </a>
-            ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-full bg-success-bg px-3 py-1.5 text-xs font-semibold text-success sm:flex">
+              <span className="h-2 w-2 rounded-full bg-success" />
+              Celo
+            </span>
             {mounted && (
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 title="Toggle theme"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-card text-muted-foreground transition-colors hover:text-foreground"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-card text-muted-foreground transition-colors hover:text-foreground"
               >
                 {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
               </button>
             )}
             <button
               onClick={launchApp}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 max-md:hidden"
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 max-lg:hidden"
             >
               {isConnecting ? 'Connecting…' : 'Launch app'}
               <ArrowRight size={14} />
@@ -210,7 +251,7 @@ export default function LandingPage() {
               aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={menuOpen}
               aria-controls="mobile-navigation"
-              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-line bg-card max-md:flex"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-line bg-card max-lg:flex"
             >
               {menuOpen ? <X size={16} /> : <Menu size={16} />}
             </button>
@@ -219,22 +260,25 @@ export default function LandingPage() {
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div id="mobile-navigation" className="border-t border-line bg-background px-5 py-3 md:hidden">
-            {[
-              ['Explore', '#opportunities'],
-              ['What you can do', '#features'],
-              ['How it works', '#how-it-works'],
-              ['Creator spotlight', '#leaderboard'],
-            ].map(([label, href]) => (
-              <a
+          <div id="mobile-navigation" className="border-t border-line bg-background px-5 py-3 lg:hidden">
+            {APP_NAV_LINKS.map(({ label, href }) => (
+              <Link
                 key={href}
                 href={href}
                 onClick={() => setMenuOpen(false)}
-                className="block rounded-lg px-2 py-2.5 text-sm font-medium text-muted-foreground"
+                className="block rounded-lg border border-transparent px-2 py-2.5 text-sm font-medium text-muted-foreground"
               >
                 {label}
-              </a>
+              </Link>
             ))}
+            <a
+              href="#how-it-works"
+              onClick={() => setMenuOpen(false)}
+              aria-current={activeSection === '#how-it-works' ? 'location' : undefined}
+              className="block rounded-lg border border-transparent px-2 py-2.5 text-sm font-medium text-muted-foreground"
+            >
+              How it works
+            </a>
             <button
               onClick={() => { setMenuOpen(false); launchApp(); }}
               className="mt-2 flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary text-sm font-bold text-primary-foreground"
@@ -245,6 +289,8 @@ export default function LandingPage() {
           </div>
         )}
       </header>
+
+      <ActivityTicker />
 
       {launchError && (
         <div
@@ -266,93 +312,197 @@ export default function LandingPage() {
       )}
 
       {/* ─── Hero ───────────────────────────────────────────── */}
-      <section className="mx-auto grid w-full max-w-[min(1440px,94vw)] grid-cols-[minmax(0,1fr)_minmax(390px,0.9fr)] items-center gap-16 px-6 py-20 2xl:gap-24 2xl:px-10 max-lg:grid-cols-1 max-lg:max-w-6xl max-lg:gap-12 max-lg:px-5 max-lg:py-14">
-        <div className="motion-safe:animate-fade-up motion-reduce:animate-none 2xl:pr-10">
-          <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            Community participation, powered by G$
-          </p>
-          <h1 className="mt-4 max-w-[13ch] font-display text-[clamp(3rem,5.4vw,5.6rem)] leading-[0.98] font-bold tracking-[-0.055em] max-md:text-5xl">
-            Turn participation into <span className="relative inline-block whitespace-nowrap">
-              <span className="relative z-10">opportunity.</span>
-              <span className="absolute inset-x-0 bottom-1 z-0 h-3 rounded-sm bg-accent/80 max-md:h-2" />
-            </span>
+      <section className="relative isolate mx-auto grid min-h-[530px] w-full max-w-[min(1440px,94vw)] grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-center gap-10 px-6 py-12 2xl:gap-16 2xl:px-10 max-lg:min-h-0 max-lg:max-w-6xl max-lg:grid-cols-1 max-lg:gap-12 max-lg:px-5 max-lg:py-14">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-36 -top-20 -z-10 h-[680px] w-[760px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(231,245,44,0.14),rgba(231,245,44,0.02)_50%,transparent_72%)] max-lg:right-[-30%] max-lg:top-40 max-lg:h-[480px]" />
+        <div className="motion-safe:animate-fade-up motion-reduce:animate-none">
+          <h1 className="mt-6 max-w-[16ch] font-display text-[clamp(3rem,5.1vw,5.25rem)] leading-[0.93] font-bold tracking-[-0.065em] max-lg:max-w-[14ch] max-md:text-5xl">
+            Your hub for<br className="hidden xl:block" /> <span className="relative z-0 inline-block italic text-accent">
+              G$ opportunities
+              <span aria-hidden="true" className="absolute -bottom-2 left-0 -z-10 h-2 w-full -rotate-2 rounded-full bg-accent/50" />
+            </span> and rewards.
           </h1>
 
-          <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-muted-foreground max-md:text-base">
-            Discover tasks, join campaigns, earn G$, and support the communities you care about. Everything you need to participate and grow, in one place.
+          <p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground max-md:text-base">
+            Discover opportunities, contribute to communities, earn G$, and support the people and projects making a difference.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch">
             <button
               onClick={launchApp}
-              className="flex h-12 items-center justify-center gap-2 rounded-lg bg-primary px-6 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
+              className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-7 text-sm font-bold text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
-              {isConnecting ? 'Connecting…' : 'Explore GOODHUB'}
+              {isConnecting ? 'Connecting…' : 'Explore Good Hub'}
               <ArrowRight size={16} />
             </button>
             <a
               href="#how-it-works"
-              className="flex h-12 items-center justify-center rounded-lg border border-line bg-card/70 px-6 text-sm font-semibold transition-colors hover:border-foreground/30"
+              className="flex h-12 items-center justify-center gap-2 rounded-full border border-foreground/40 bg-card/70 px-6 text-sm font-semibold transition-colors hover:bg-card"
             >
+              <span aria-hidden="true">▶</span>
               How it works
             </a>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-2">
-            {['Tasks', 'Campaigns', 'Daily rewards', 'Creator support'].map((label) => (
-              <span key={label} className="rounded-md border border-line bg-card/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                {label}
-              </span>
-            ))}
+          <p className="mt-4 text-xs font-medium tracking-wide text-muted-foreground">
+            Built on Celo <span aria-hidden="true">·</span> Uses G$ <span aria-hidden="true">·</span> Independent community app
+          </p>
+
+          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm font-medium">
+            {([
+              [ListTodo, 'Tasks'],
+              [Megaphone, 'Campaigns'],
+              [Gift, 'Daily rewards'],
+              [Users, 'Creator support'],
+            ] as const).map(([Icon, label]) => {
+              const FeatureIcon = Icon;
+              return (
+                <span key={String(label)} className="inline-flex items-center gap-2 text-foreground">
+                  <FeatureIcon size={17} strokeWidth={2.2} />
+                  {label}
+                </span>
+              );
+            })}
           </div>
         </div>
 
-        <div className="relative motion-safe:animate-fade-in motion-reduce:animate-none">
-          <div className="landing-grid absolute -inset-5 rounded-2xl opacity-60" aria-hidden="true" />
-          <div className="glass-panel relative rounded-2xl border border-white/60 p-5 shadow-[0_16px_50px_rgba(16,38,74,0.08)] max-sm:p-3">
-            <div className="rounded-xl border border-line/80 bg-card/90 p-5 backdrop-blur-xl max-sm:p-4">
-              <div className="flex items-center justify-between border-b border-line pb-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">GOODHUB overview</p>
-                  <p className="mt-1 font-display text-lg font-bold">Your community hub</p>
+        <div className="relative mx-auto w-full max-w-[760px] motion-safe:animate-fade-in motion-reduce:animate-none lg:translate-x-5 lg:rotate-[0.5deg] lg:scale-[1.04]">
+          <div aria-hidden="true" className="absolute -inset-7 -z-10 rounded-[2.5rem] bg-[radial-gradient(ellipse_at_center,rgba(231,245,44,0.22),transparent_68%)]" />
+          <div className="glass-panel overflow-hidden rounded-[1.6rem] border border-white/70 p-2 shadow-[0_32px_90px_rgba(16,38,74,0.17)] ring-1 ring-foreground/5 max-sm:rounded-2xl max-sm:p-1 dark:border-white/10">
+            <div className="flex min-h-[390px] overflow-hidden rounded-[1.2rem] border border-line/70 bg-background/60 max-sm:min-h-0 max-sm:rounded-xl">
+              <aside className="w-[116px] shrink-0 border-r border-line/70 bg-card/70 p-3 max-sm:hidden">
+                <GoodHubLogo className="h-6 w-[88px]" />
+                <div className="mt-7 space-y-1">
+                  {[
+                    ['Dashboard', true],
+                    ['Wallet', false],
+                    ['Explore tasks', false],
+                    ['My tasks', false],
+                    ['Daily rewards', false],
+                    ['Campaigns', false],
+                    ['My campaigns', false],
+                  ].map(([label, active]) => (
+                    <div key={String(label)} className={`truncate rounded-lg px-2 py-1.5 text-[9px] font-medium ${active ? 'bg-accent/55 text-foreground' : 'text-muted-foreground'}`}>
+                      {label}
+                    </div>
+                  ))}
+                  <p className="px-2 pt-3 text-[8px] font-bold uppercase tracking-wider text-muted-foreground/70">Community</p>
+                  <div className="rounded-lg px-2 py-1.5 text-[9px] font-medium text-muted-foreground">Discover creators</div>
+                  <div className="rounded-lg px-2 py-1.5 text-[9px] font-medium text-muted-foreground">My public page</div>
                 </div>
-                <span className="rounded-md bg-accent/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">Preview</span>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-line bg-background/80 p-3.5">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground"><Wallet size={14} /> Wallet balance</div>
-                  <p className="mt-2 font-display text-xl font-bold">Connect wallet</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Live balance appears in your dashboard</p>
+              </aside>
+
+              <div className="min-w-0 flex-1 p-4 sm:p-5">
+                <div className="flex items-center justify-between border-b border-line/70 pb-3">
+                  <div className="flex items-center gap-2 sm:hidden"><GoodHubLogo className="h-6 w-[88px]" /><span className="text-muted-foreground">/</span></div>
+                  <span className="hidden text-[10px] font-semibold text-muted-foreground sm:inline">Dashboard</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success-bg px-2.5 py-1 text-[9px] font-bold text-success">
+                    <span className="h-1.5 w-1.5 rounded-full bg-success" /> Celo
+                  </span>
+                  <span className="rounded-full border border-line bg-card px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">Illustrative preview</span>
                 </div>
-                <div className="rounded-lg border border-line bg-background/80 p-3.5">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground"><RotateCw size={14} /> Daily rewards</div>
-                  <p className="mt-2 font-display text-xl font-bold">Spin to earn</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Eligibility depends on your activity</p>
+
+                <div className="mt-4">
+                  <p className="font-display text-sm font-bold sm:text-base">Welcome to Good Hub</p>
+                  <p className="text-[10px] text-muted-foreground sm:text-[11px]">A home for your community participation.</p>
                 </div>
-              </div>
-              <div className="mt-3 rounded-lg border border-line bg-background/80 p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Opportunity discovery</p>
-                    <p className="mt-1 text-sm font-bold">Find a way to contribute</p>
+
+                <div className="mt-4 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-line/80 bg-card p-3 sm:p-4">
+                    <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground sm:text-[10px]"><Wallet size={12} /> Wallet balance</div>
+                    <p className="mt-2 font-display text-sm font-bold sm:text-base">Your G$ balance</p>
+                    <div className="mt-2 flex gap-1.5">
+                      <span className="rounded-full bg-accent/35 px-2 py-1 text-[8px] font-bold">Send G$</span>
+                      <span className="rounded-full bg-muted px-2 py-1 text-[8px] font-bold">Withdraw</span>
+                    </div>
                   </div>
-                  <Compass size={17} className="text-primary" />
+                  <div className="rounded-xl border border-line/80 bg-card p-3 sm:p-4">
+                    <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground sm:text-[10px]"><Clock3 size={12} /> Pending rewards</div>
+                    <p className="mt-2 font-display text-sm font-bold sm:text-base">Track approvals</p>
+                    <span className="mt-2 inline-flex items-center gap-1 text-[8px] font-semibold text-muted-foreground">View details <ArrowRight size={9} /></span>
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2 rounded-md border border-success/20 bg-success-bg/50 px-3 py-2">
-                  <Check size={14} className="text-success" />
-                  <p className="text-xs font-medium">Complete work, submit proof, earn after review</p>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="font-display text-[11px] font-bold sm:text-xs">Quick actions</p>
+                  <span className="text-[8px] text-muted-foreground">Explore the hub</span>
                 </div>
-                <Link href="#opportunities" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary">
-                  Browse live opportunities <ArrowRight size={13} />
-                </Link>
+                <div className="mt-2 grid grid-cols-4 gap-1.5 sm:gap-2">
+                  {([
+                    [Search, 'Find tasks', '/tasks'],
+                    [Gift, 'Daily rewards', '/spin'],
+                    [Megaphone, 'Campaigns', '/campaigns'],
+                    [Heart, 'Creators', '/leaderboard'],
+                  ] as const).map(([Icon, label, href]) => {
+                    const ActionIcon = Icon;
+                    return (
+                      <Link key={String(label)} href={String(href)} className="min-w-0 rounded-lg border border-line/80 bg-card px-1.5 py-2 text-center transition-colors hover:border-accent/70 sm:px-2">
+                        <span className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-accent/60"><ActionIcon size={11} /></span>
+                        <span className="mt-1 block truncate text-[8px] font-semibold sm:text-[9px]">{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="font-display text-[11px] font-bold sm:text-xs">Recommended opportunities</p>
+                  <a href="#opportunities" className="text-[9px] font-semibold text-primary">View all <ArrowRight className="ml-0.5 inline" size={10} /></a>
+                </div>
+                <div className="mt-2 rounded-xl border border-line/80 bg-card p-3">
+                  {opportunitiesQuery.data?.[0] ? (
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/35"><Compass size={20} /></span>
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center gap-1 text-[8px] font-bold text-success"><span className="h-1.5 w-1.5 rounded-full bg-success" /> Open {opportunitiesQuery.data[0].kind}</span>
+                        <p className="truncate text-[10px] font-bold sm:text-[11px]">{opportunitiesQuery.data[0].title}</p>
+                        <p className="truncate text-[9px] text-muted-foreground">{opportunitiesQuery.data[0].description}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] font-bold">{formatReward(opportunitiesQuery.data[0].reward)} G$</p>
+                        <p className="text-[8px] text-muted-foreground">{opportunitiesQuery.data[0].availability} spots</p>
+                      </div>
+                    </div>
+                  ) : opportunitiesQuery.isError ? (
+                    <p className="text-[9px] text-muted-foreground">Live opportunities are temporarily unavailable.</p>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/35"><Compass size={20} /></span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold">Find a way to contribute</p>
+                        <p className="text-[9px] text-muted-foreground">{opportunitiesQuery.isPending ? 'Loading live opportunities…' : 'New opportunities will appear here.'}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-2 flex items-center gap-1.5 border-t border-line/70 pt-2 text-[8px] text-muted-foreground">
+                    <CircleCheck size={11} className="text-success" /> Rewards are shown from live listings and paid after approval.
+                  </div>
+                </div>
               </div>
-              <p className="mt-3 text-center text-[10px] text-muted-foreground">Illustrative interface preview · not account activity</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section aria-label="Verified platform activity" className="border-y border-line bg-card/60">
+      <section aria-label="GOODHUB benefits" className="glass-panel mx-auto mb-10 grid w-[min(1440px,94vw)] grid-cols-4 divide-x divide-line rounded-3xl border border-line/70 px-3 py-4 shadow-[0_10px_40px_rgba(16,38,74,0.05)] max-md:grid-cols-2 max-md:divide-x-0 max-md:gap-y-3 max-sm:grid-cols-1">
+        {([
+          [Zap, 'Earn rewards', 'Complete tasks and earn G$.'],
+          [Users, 'Grow community', 'Be part of something bigger.'],
+          [ShieldCheck, 'On-chain transparency', 'Funded tasks and campaigns use G$ escrow.'],
+          [Globe, 'For everyone', 'Creators, contributors and more.'],
+        ] as const).map(([Icon, title, description]) => {
+          const BenefitIcon = Icon;
+          return (
+            <div key={String(title)} className="flex items-center gap-4 px-5 py-2 max-md:px-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground max-sm:h-10 max-sm:w-10"><BenefitIcon size={22} strokeWidth={2.2} /></span>
+              <span className="min-w-0">
+                <span className="block font-display text-sm font-bold">{title}</span>
+                <span className="mt-0.5 block text-[10px] leading-relaxed text-muted-foreground sm:text-[11px]">{description}</span>
+              </span>
+            </div>
+          );
+        })}
+      </section>
+
+      <section aria-label="Verified platform activity" className="glass-panel border-y border-line/70">
         <div className="mx-auto grid max-w-6xl grid-cols-3 divide-x divide-line px-5 py-7 max-sm:grid-cols-1 max-sm:divide-x-0 max-sm:divide-y">
           {[
             {
@@ -393,7 +543,7 @@ export default function LandingPage() {
           </div>
           <div className="mt-8 grid grid-cols-4 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
             {FEATURES.map(({ icon: Icon, title, desc, href, action }, index) => (
-              <article key={title} className={`group flex flex-col border border-line bg-card/80 p-5 transition-colors hover:border-foreground/25 hover:bg-card motion-safe:animate-fade-up motion-reduce:animate-none ${index === 0 ? 'rounded-l-xl max-sm:rounded-xl' : ''} ${index === 3 ? 'rounded-r-xl max-sm:rounded-xl' : ''}`}>
+              <article key={title} className={`glass-panel group flex flex-col border border-line p-5 transition-colors hover:border-foreground/25 hover:bg-card motion-safe:animate-fade-up motion-reduce:animate-none ${index === 0 ? 'rounded-l-xl max-sm:rounded-xl' : ''} ${index === 3 ? 'rounded-r-xl max-sm:rounded-xl' : ''}`}>
                 <span className="flex h-9 w-9 items-center justify-center rounded-md bg-accent/70 text-accent-foreground">
                   <Icon size={17} />
                 </span>
@@ -518,7 +668,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="border-y border-line bg-card/50">
+      <section id="creator-types" className="scroll-mt-24 border-y border-line bg-card/50">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-20 md:grid-cols-[0.8fr_1.2fr] md:items-center max-md:py-16">
           <div>
             <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -552,7 +702,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <CreatorsLeaderboard />
+      <CommunityLeaderboard />
 
       {/* ─── Contract transparency ──────────────────────────── */}
       <section id="contract" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-24 max-md:py-16">
@@ -616,12 +766,13 @@ export default function LandingPage() {
       {/* ─── Footer ─────────────────────────────────────────── */}
       <footer className="border-t border-line bg-card/40">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-8 max-sm:flex-col max-sm:gap-4">
-          <GoodHubLogo className="h-8 text-sm" />
+          <GoodHubLogo className="h-8 w-[140px]" />
           <p className="font-mono text-[11px] text-muted-foreground">
             Community rewards using G$ on Celo
           </p>
         </div>
       </footer>
+      </div>
     </div>
   );
 }
