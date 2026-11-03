@@ -10,6 +10,7 @@ import { ERC20_ABI, G_DOLLAR_ADDRESS } from '@/lib/contracts';
 import { CAMPAIGN_ESCROW_ABI } from '@/lib/campaignChain';
 import ExpiryCountdown from '@/components/ExpiryCountdown';
 import { getWalletActionErrorMessage } from '@/lib/walletErrors';
+import { notifyActivityChanged } from '@/lib/notificationState';
 
 const ESCROW_ADDRESS = process.env.NEXT_PUBLIC_CAMPAIGN_ESCROW_ADDRESS as `0x${string}` | undefined;
 
@@ -206,6 +207,7 @@ export default function CampaignsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...payload, auth }),
       }));
+      notifyActivityChanged();
       setApplyCampaign(null);
       setApplicationText('');
       setNotice('Application submitted for admin review.');

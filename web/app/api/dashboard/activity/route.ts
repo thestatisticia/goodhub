@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { isAuthFailure, verifyTaskAuth, type TaskAuth } from '@/lib/taskSecurity';
+import { isAddress } from 'viem';
 
 type ActivityCategory = 'task' | 'campaign' | 'tip' | 'spin';
 
@@ -15,51 +15,50 @@ interface ActivityEvent {
   transactionHash?: string | null;
 }
 
-export async function POST(request: NextRequest) {
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+export async function GET(request: NextRequest) {
+  const wallet = request.nextUrl.searchParams.get('wallet');
+  if (!wallet || !isAddress(wallet)) {
+    return NextResponse.json({ error: 'A valid wallet address is required.' }, { status: 400 });
   }
-
-  const auth = body.auth as TaskAuth | undefined;
-  const verified = await verifyTaskAuth(auth, 'POST', '/api/dashboard/activity', {}, false);
-  if (isAuthFailure(verified)) return verified;
-
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'Wallet activity is temporarily unavailable.' }, { status: 503 });
+  }
   const supabase = createServerSupabaseClient();
-  const wallet = verified.address.toLowerCase();
+  const normalizedWallet = wallet.toLowerCase();
   try {
     const [submissionResult, applicationResult, awardsResult, sentTipsResult, creatorResult] = await Promise.all([
       supabase.from('tipjar_task_submissions')
         .select('id,task_id,status,created_at,updated_at,review_tx_hash')
-        .eq('worker_address', wallet)
+        .eq('worker_address', normalizedWallet)
         .order('updated_at', { ascending: false })
         .limit(30),
       supabase.from('tipjar_campaign_applications')
         .select('id,campaign_id,status,created_at,updated_at,review_tx_hash')
-        .eq('participant_address', wallet)
+        .eq('participant_address', normalizedWallet)
         .order('updated_at', { ascending: false })
         .limit(30),
       supabase.from('tipjar_spin_awards')
-        .select('id,source_type,outcome,prize_g,status,payout_tx_hash,created_at,paid_at')
-        .eq('wallet_address', wallet)
+        .select('id,source_type,prize_g,status,payout_tx_hash,created_at,paid_at')
+        .eq('wallet_address', normalizedWallet)
         .order('created_at', { ascending: false })
         .limit(30),
       supabase.from('tipjar_tips')
         .select('id,creator_username,amount,created_at,tx_hash')
-        .ilike('sender_address', wallet)
+        .ilike('sender_address', normalizedWallet)
         .order('created_at', { ascending: false })
         .limit(30),
       supabase.from('tipjar_creators')
         .select('username')
-        .eq('wallet_address', wallet)
+        .eq('wallet_address', normalizedWallet)
         .maybeSingle(),
     ]);
 
     const queryError = submissionResult.error || applicationResult.error ||
-      awardsResult.error || sentTipsResult.error || creatorResult.error;
+      awardsResult.error || sentTipsResult.error;
     if (queryError) throw queryError;
+    if (creatorResult.error) {
+      console.error('Creator profile lookup failed while loading wallet activity:', creatorResult.error);
+    }
 
     const submissions = submissionResult.data ?? [];
     const applications = applicationResult.data ?? [];
@@ -167,7 +166,7 @@ export async function POST(request: NextRequest) {
         id: `spin:${award.id}:${award.status}`,
         category: 'spin',
         title: award.status === 'paid' ? 'Spin reward paid' : award.status === 'failed' ? 'Spin reward failed' : 'Spin result',
-        description: `${award.outcome} · ${award.source_type === 'ubi_claim' ? 'UBI claim' : 'completed task'}`,
+        description: `${award.prize_g} G$ · ${award.source_type === 'ubi_claim' ? 'UBI claim' : 'completed task'}`,
         status: award.status === 'paid' ? 'Paid' : award.status === 'failed' ? 'Failed' : 'Payout pending',
         createdAt: award.paid_at || award.created_at,
         amount: String(award.prize_g),
@@ -203,9 +202,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(events
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
-      .slice(0, 40));
+      .slice(0, 40), {
+      headers: { 'Cache-Control': 'private, no-store, max-age=0' },
+    });
   } catch (error) {
     console.error('Dashboard activity load failed:', error);
-    return NextResponse.json({ error: 'Could not load your private activity.' }, { status: 503 });
+    return NextResponse.json({ error: 'Could not load wallet activity. Please retry shortly.' }, { status: 503 });
   }
 }

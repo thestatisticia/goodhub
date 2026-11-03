@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 import { getUnreadNotificationCount } from '@/lib/notificationState';
+import { useDashboardActivity } from '@/hooks/useDashboardActivity';
 
 function subscribe(onStoreChange: () => void) {
   window.addEventListener('ghub-notifications-updated', onStoreChange);
@@ -13,6 +14,7 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function useNotificationCount(wallet: string | undefined) {
+  useDashboardActivity();
   const getSnapshot = useCallback(
     () => wallet ? getUnreadNotificationCount(wallet) : 0,
     [wallet],

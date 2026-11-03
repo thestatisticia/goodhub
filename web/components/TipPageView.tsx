@@ -6,6 +6,7 @@ import { useAccount, useConnect } from 'wagmi';
 import { useSendTip } from '@/hooks/useSendTip';
 import { useGDollarBalance } from '@/hooks/useGDollarBalance';
 import { getWalletConnectionErrorMessage } from '@/lib/walletErrors';
+import { notifyActivityChanged } from '@/lib/notificationState';
 import type { Creator, Tip } from '@/providers/CreatorProvider';
 
 interface TipPageViewProps {
@@ -18,6 +19,7 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
   const [customAmount, setCustomAmount] = useState('');
   const [message, setMessage] = useState('');
   const [senderName, setSenderName] = useState('');
+  const [activitySaveError, setActivitySaveError] = useState('');
 
   const { sendTip, status, txHash, error: tipError, reset: resetTip } = useSendTip();
   const { isConnected, address } = useAccount();
@@ -51,6 +53,7 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
   const handleSubmitTip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (activeAmount <= 0) return;
+    setActivitySaveError('');
 
     const result = await sendTip({
       creatorUsername: creatorInfo.username,
@@ -59,15 +62,21 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
     });
 
     if (result && onAddTip) {
-      onAddTip({
-        creator_username: creatorInfo.username,
-        sender_name: senderName.trim() || 'Anonymous Fan',
-        sender_address: result.senderAddress,
-        amount: activeAmount,
-        message: message.trim() || 'Supported the creator!',
-        tx_hash: result.txHash,
-      });
+      try {
+        await onAddTip({
+          creator_username: creatorInfo.username,
+          sender_name: senderName.trim() || 'Anonymous Fan',
+          sender_address: result.senderAddress,
+          amount: activeAmount,
+          message: message.trim() || 'Supported the creator!',
+          tx_hash: result.txHash,
+        });
+      } catch (error) {
+        console.error('Confirmed tip activity could not be saved:', error);
+        setActivitySaveError('Your tip was confirmed, but its activity could not be saved. Please contact support if it does not appear.');
+      }
     }
+    if (result) notifyActivityChanged();
   };
 
   const handleConnectWallet = async () => {
@@ -90,6 +99,7 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
     setMessage('');
     setSenderName('');
     setCustomAmount('');
+    setActivitySaveError('');
   };
 
   const inputClass =
@@ -220,6 +230,11 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
           <p className="mt-1 text-sm text-muted-foreground">
             {activeAmount} G$ is on its way to {creatorInfo.name || 'the creator'}.
           </p>
+          {activitySaveError && (
+            <p role="status" className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+              {activitySaveError}
+            </p>
+          )}
 
           <div className="mt-5 rounded-xl border border-line bg-muted/50 p-4 text-left text-sm">
             <div className="flex justify-between py-1.5">

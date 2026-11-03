@@ -21,6 +21,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { useTaskSignature } from '@/hooks/useTaskSignature';
 import { SPIN_OUTCOMES } from '@/lib/spinWheelConfig';
 import RockPaperScissorsGame from '@/components/RockPaperScissorsGame';
+import { notifyActivityChanged } from '@/lib/notificationState';
 
 interface AvailableSpin {
   sourceType: 'ubi_claim' | 'task_completion';
@@ -327,6 +328,7 @@ export default function SpinPage() {
       if (!response.ok && response.status !== 202) {
         throw new Error(result.error || 'Could not complete the spin.');
       }
+      notifyActivityChanged();
 
       if (typeof result.outcome === 'string') {
         const offset = getOutcomeOffset(outcomes, result.outcome);

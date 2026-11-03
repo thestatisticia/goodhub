@@ -1,10 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
-import { useTaskSignature } from '@/hooks/useTaskSignature';
+import { syncNotifications } from '@/lib/notificationState';
 
-export type ActivityCategory = 'task' | 'campaign' | 'tip' | 'spin';
+export type ActivityCategory = 'task' | 'campaign' | 'tip' | 'spin' | 'wallet';
 
 export interface DashboardActivityEvent {
   id: string;
@@ -25,22 +26,34 @@ async function parseResponse(response: Response) {
 
 export function useDashboardActivity() {
   const { address } = useAccount();
-  const signRequest = useTaskSignature();
   const query = useQuery({
     queryKey: ['dashboard-activity', address],
-    enabled: false,
+    enabled: Boolean(address),
     retry: false,
-    staleTime: 30_000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      if (!address) throw new Error('Connect your wallet to view private activity.');
-      const auth = await signRequest('POST', '/api/dashboard/activity', {});
-      return parseResponse(await fetch('/api/dashboard/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auth }),
-      }));
+      if (!address) throw new Error('Connect your wallet to view activity.');
+      return parseResponse(await fetch(
+        `/api/dashboard/activity?wallet=${encodeURIComponent(address)}`,
+        { cache: 'no-store' },
+      ));
     },
   });
+  const { data, refetch } = query;
+
+  useEffect(() => {
+    if (address && data) syncNotifications(address, data);
+  }, [address, data]);
+
+  useEffect(() => {
+    const refreshActivity = () => {
+      void refetch();
+    };
+    window.addEventListener('ghub-activity-updated', refreshActivity);
+    return () => window.removeEventListener('ghub-activity-updated', refreshActivity);
+  }, [refetch]);
 
   const loadActivity = async (refresh = false) => {
     if (query.data && !refresh) return query.data;

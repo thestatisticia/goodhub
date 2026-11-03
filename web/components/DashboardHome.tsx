@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   MessageSquare, Heart, ArrowRight, ArrowUpRight, Loader2, X, Bell,
-  ListTodo, Megaphone, RotateCw, Search, Wallet, Clock3,
+  ListTodo, Megaphone, RotateCw, Search, Wallet, Clock3, Copy,
 } from 'lucide-react';
 import { formatUnits, isAddress, parseUnits } from 'viem';
 import { useWalletClient, usePublicClient } from 'wagmi';
@@ -14,7 +14,7 @@ import { useCreator } from '@/providers/CreatorProvider';
 import { useGDollarBalance } from '@/hooks/useGDollarBalance';
 import { ERC20_ABI, G_DOLLAR_ADDRESS } from '@/lib/contracts';
 import { useDashboardActivity } from '@/hooks/useDashboardActivity';
-import { syncNotifications } from '@/lib/notificationState';
+import { addLocalActivity, notifyActivityChanged } from '@/lib/notificationState';
 
 interface CreatorDashboardStats {
   taskEarnings: string;
@@ -144,10 +144,7 @@ export default function DashboardHome() {
   const [withdrawBalanceWarning, setWithdrawBalanceWarning] = useState<string | null>(null);
   const [withdrawTxHash, setWithdrawTxHash] = useState<`0x${string}` | null>(null);
   const [withdrawTxStatus, setWithdrawTxStatus] = useState<'pending' | 'confirmed' | 'failed' | null>(null);
-
-  useEffect(() => {
-    if (walletAddress && activityQuery.data) syncNotifications(walletAddress, activityQuery.data);
-  }, [walletAddress, activityQuery.data]);
+  const [receiveMessage, setReceiveMessage] = useState('');
 
   const historicalEarnings = creatorStatsQuery.data && !creatorStatsQuery.isError && !tipStatsError
     ? tipStats.totalReceived +
@@ -161,6 +158,16 @@ export default function DashboardHome() {
   const handleSetMax = () => {
     if (gBalance == null || gBalance <= 0) return;
     setAmount(String(gBalance));
+  };
+
+  const handleReceive = async () => {
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setReceiveMessage('Wallet address copied. Share it to receive G$.');
+    } catch (error) {
+      console.error('Wallet address copy failed:', error);
+      setReceiveMessage('Could not copy the wallet address. Copy it from the navbar instead.');
+    }
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
@@ -211,6 +218,16 @@ export default function DashboardHome() {
       }
       setWithdrawTxStatus('confirmed');
       setAmount('');
+      addLocalActivity(walletAddress, {
+        id: `wallet:sent:${txHash}`,
+        category: 'wallet',
+        title: 'G$ sent',
+        description: `${formatUnits(parsedAmount, 18)} G$ sent to ${recipient.slice(0, 6)}…${recipient.slice(-4)}`,
+        status: 'Sent',
+        createdAt: new Date().toISOString(),
+        transactionHash: txHash,
+      });
+      notifyActivityChanged();
       try {
         const confirmedBalance = await publicClient.readContract({
           address: G_DOLLAR_ADDRESS,
@@ -344,10 +361,19 @@ export default function DashboardHome() {
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">Spendable wallet funds</span>
-              <button type="button" onClick={() => setWithdrawOpen(true)} disabled={balanceError || gBalance == null} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40">
-                Send G$
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void handleReceive()} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-bold transition-colors hover:bg-muted">
+                  <Copy size={12} /> Receive
+                </button>
+                <Link href="/leaderboard" className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-bold transition-colors hover:bg-muted">
+                  Tip a creator
+                </Link>
+                <button type="button" onClick={() => setWithdrawOpen(true)} disabled={balanceError || gBalance == null} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40">
+                  Send G$
+                </button>
+              </div>
             </div>
+            {receiveMessage && <p role="status" className="mt-2 text-xs text-muted-foreground">{receiveMessage}</p>}
             {!balanceLoading && !balanceError && gBalance === 0 && (
               <p className="mt-3 border-t border-line/70 pt-3 text-xs leading-relaxed text-muted-foreground">
                 Your wallet is ready. <Link href="/share" className="font-semibold text-primary underline-offset-2 hover:underline">Share your page</Link> to receive G$ tips.

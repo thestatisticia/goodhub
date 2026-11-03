@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bell, Check, Loader2, RotateCw, Settings2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useDashboardActivity } from '@/hooks/useDashboardActivity';
@@ -20,6 +20,7 @@ const CATEGORY_LABELS = {
   campaign: 'Campaign updates',
   tip: 'Tips received or sent',
   spin: 'Daily rewards',
+  wallet: 'Wallet transfers',
 } as const;
 
 function formatActivityDate(value: string) {
@@ -44,8 +45,6 @@ export default function NotificationsPage() {
 
 function NotificationsInbox({ wallet }: { wallet: string }) {
   const activityQuery = useDashboardActivity();
-  const { refetch: refetchActivity } = activityQuery;
-  const autoLoadStarted = useRef(false);
   const [preferences, setPreferences] = useState<NotificationPreferences>(
     () => getNotificationPreferences(wallet),
   );
@@ -53,16 +52,6 @@ function NotificationsInbox({ wallet }: { wallet: string }) {
     () => getReadNotificationIds(wallet),
   );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-
-  useEffect(() => {
-    if (autoLoadStarted.current) return;
-    autoLoadStarted.current = true;
-    void refetchActivity().then(({ data }) => {
-      if (!data) return;
-      syncNotifications(wallet, data);
-      setReadIds(getReadNotificationIds(wallet));
-    });
-  }, [refetchActivity, wallet]);
 
   const loadNotifications = async (refresh = false) => {
     const events = await activityQuery.loadActivity(refresh || Boolean(activityQuery.data));
@@ -98,9 +87,18 @@ function NotificationsInbox({ wallet }: { wallet: string }) {
         <div>
           <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Your account</p>
           <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">Notifications</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Private task, campaign, tip, and reward updates for your wallet.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Task, campaign, tip, and reward updates for your connected wallet. No signing required.</p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void loadNotifications(true)}
+            disabled={activityQuery.isFetching}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-card px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+          >
+            <RotateCw size={15} className={activityQuery.isFetching ? 'animate-spin' : ''} />
+            <span className="max-sm:hidden">Refresh</span>
+          </button>
           <button
             type="button"
             onClick={() => setPreferencesOpen((open) => !open)}
@@ -188,40 +186,24 @@ function NotificationsInbox({ wallet }: { wallet: string }) {
             </ul>
           </section>
         )
+      ) : activityQuery.isError ? (
+        <section className="rounded-xl border border-line bg-card p-8 text-center">
+          <p role="alert" className="text-sm text-danger">
+            {activityQuery.error instanceof Error ? activityQuery.error.message : 'Could not load notifications.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadNotifications(true)}
+            disabled={activityQuery.isFetching}
+            className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-line px-4 text-sm font-semibold disabled:opacity-50"
+          >
+            <RotateCw size={15} /> Retry
+          </button>
+        </section>
       ) : (
         <section className="rounded-xl border border-line bg-card p-8 text-center">
-          {activityQuery.isError ? (
-            <>
-              <p role="alert" className="text-sm text-danger">
-                {activityQuery.error instanceof Error ? activityQuery.error.message : 'Could not load notifications.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => void loadNotifications(true)}
-                disabled={activityQuery.isFetching}
-                className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-line px-4 text-sm font-semibold disabled:opacity-50"
-              >
-                <RotateCw size={15} /> Retry
-              </button>
-            </>
-          ) : (
-            <>
-              <Bell size={24} className="mx-auto text-muted-foreground" />
-              <h3 className="mt-3 font-display text-base font-bold">Load private updates</h3>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Sign a free wallet message to securely read your account activity. This does not send a transaction or spend G$.
-              </p>
-              <button
-                type="button"
-                onClick={() => void loadNotifications()}
-                disabled={activityQuery.isFetching}
-                className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-              >
-                {activityQuery.isFetching ? <Loader2 size={15} className="animate-spin" /> : <Bell size={15} />}
-                {activityQuery.isFetching ? 'Loading updates…' : 'Load notifications'}
-              </button>
-            </>
-          )}
+          <Loader2 size={22} className="mx-auto animate-spin text-muted-foreground" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading your wallet updates…</p>
         </section>
       )}
     </div>
