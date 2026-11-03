@@ -8,27 +8,6 @@ interface ActivityItem {
   message: string;
 }
 
-function getDemoActivity(): ActivityItem[] {
-  const createdAt = new Date().toISOString();
-  return [
-    {
-      id: 'demo:approved-task',
-      createdAt,
-      message: '0x111…111 had a task approved · earned 10 G$',
-    },
-    {
-      id: 'demo:spin-win',
-      createdAt,
-      message: '0x1112…1112 won 50 G$ from a spin',
-    },
-    {
-      id: 'demo:ubi-claim',
-      createdAt,
-      message: '0x…111 claimed daily UBI',
-    },
-  ];
-}
-
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -46,7 +25,7 @@ export async function GET() {
 
   try {
     const supabase = createServerSupabaseClient();
-    const [tasksResult, campaignsResult, spinsResult] = await Promise.all([
+    const [tasksResult, campaignsResult, spinsResult, publishedCampaignsResult, tipsResult] = await Promise.all([
       supabase.from('tipjar_task_submissions')
         .select('id,task_id,worker_address,updated_at')
         .eq('status', 'approved')
@@ -64,9 +43,18 @@ export async function GET() {
         .gt('prize_g', 0)
         .order('paid_at', { ascending: false })
         .limit(12),
+      supabase.from('tipjar_campaigns')
+        .select('id,title,created_at')
+        .order('created_at', { ascending: false })
+        .limit(12),
+      supabase.from('tipjar_tips')
+        .select('id,creator_username,created_at')
+        .order('created_at', { ascending: false })
+        .limit(12),
     ]);
 
-    const queryError = tasksResult.error || campaignsResult.error || spinsResult.error;
+    const queryError = tasksResult.error || campaignsResult.error || spinsResult.error ||
+      publishedCampaignsResult.error || tipsResult.error;
     if (queryError) throw queryError;
 
     const tasks = tasksResult.data ?? [];
@@ -116,8 +104,20 @@ export async function GET() {
       });
     }
 
-    if (process.env.NODE_ENV !== 'production') {
-      activity.push(...getDemoActivity());
+    for (const campaign of publishedCampaignsResult.data ?? []) {
+      activity.push({
+        id: `published-campaign:${campaign.id}`,
+        createdAt: campaign.created_at,
+        message: `New campaign published: ${campaign.title}`,
+      });
+    }
+
+    for (const tip of tipsResult.data ?? []) {
+      activity.push({
+        id: `tip:${tip.id}`,
+        createdAt: tip.created_at,
+        message: `A fan supported creator @${tip.creator_username} with a G$ tip`,
+      });
     }
 
     activity.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));

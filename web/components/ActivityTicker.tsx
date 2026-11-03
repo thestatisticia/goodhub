@@ -15,6 +15,7 @@ export default function ActivityTicker() {
   const [paused, setPaused] = useState(false);
   const tickerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<Animation | null>(null);
+  const shouldAnimate = items.length >= 4 && !reducedMotion;
 
   useEffect(() => {
     let active = true;
@@ -50,7 +51,11 @@ export default function ActivityTicker() {
 
   useEffect(() => {
     const ticker = tickerRef.current;
-    if (!ticker) return;
+    if (!ticker || !shouldAnimate) {
+      animationRef.current?.cancel();
+      animationRef.current = null;
+      return;
+    }
 
     const updateAnimation = () => {
       const segment = ticker.firstElementChild;
@@ -77,7 +82,7 @@ export default function ActivityTicker() {
       animationRef.current?.cancel();
       animationRef.current = null;
     };
-  }, [items]);
+  }, [items, shouldAnimate]);
 
   useEffect(() => {
     const animation = animationRef.current;
@@ -96,7 +101,7 @@ export default function ActivityTicker() {
           {error ? <CircleAlert size={14} /> : <Activity size={14} />}
           {error ? 'Updates unavailable' : 'Community updates'}
         </span>
-        <div className="min-w-0 flex-1 overflow-hidden">
+        <div className={`min-w-0 flex-1 ${shouldAnimate ? 'overflow-hidden' : 'overflow-x-auto'}`}>
           {error ? (
             <p role="status" className="truncate text-xs text-muted-foreground">
               Live community activity is temporarily unavailable.
@@ -108,7 +113,7 @@ export default function ActivityTicker() {
           ) : (
             <div
               ref={tickerRef}
-              className="activity-marquee flex w-max items-center"
+              className={`${shouldAnimate ? 'activity-marquee' : ''} flex w-max items-center`}
               style={{
                 backfaceVisibility: 'hidden',
                 willChange: reducedMotion ? 'auto' : 'transform',
@@ -117,7 +122,7 @@ export default function ActivityTicker() {
               onMouseLeave={() => setPaused(false)}
               aria-live="off"
             >
-              {Array.from({ length: 4 }, (_, copy) => (
+              {Array.from({ length: shouldAnimate ? 2 : 1 }, (_, copy) => (
                 <div
                   key={copy}
                   aria-hidden={copy > 0}

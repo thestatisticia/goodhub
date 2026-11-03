@@ -323,7 +323,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground max-md:text-base">
-            Discover opportunities, contribute to communities, earn G$, and support the people and projects making a difference.
+            Discover tasks, launch campaigns, support creators and earn G$ by participating in opportunities across the community.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch">
