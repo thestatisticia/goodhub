@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, Loader2, RotateCw, Settings2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useDashboardActivity } from '@/hooks/useDashboardActivity';
@@ -44,6 +44,8 @@ export default function NotificationsPage() {
 
 function NotificationsInbox({ wallet }: { wallet: string }) {
   const activityQuery = useDashboardActivity();
+  const { refetch: refetchActivity } = activityQuery;
+  const autoLoadStarted = useRef(false);
   const [preferences, setPreferences] = useState<NotificationPreferences>(
     () => getNotificationPreferences(wallet),
   );
@@ -52,8 +54,18 @@ function NotificationsInbox({ wallet }: { wallet: string }) {
   );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
+  useEffect(() => {
+    if (autoLoadStarted.current) return;
+    autoLoadStarted.current = true;
+    void refetchActivity().then(({ data }) => {
+      if (!data) return;
+      syncNotifications(wallet, data);
+      setReadIds(getReadNotificationIds(wallet));
+    });
+  }, [refetchActivity, wallet]);
+
   const loadNotifications = async (refresh = false) => {
-    const events = await activityQuery.loadActivity(refresh);
+    const events = await activityQuery.loadActivity(refresh || Boolean(activityQuery.data));
     if (!events) return;
     syncNotifications(wallet, events);
     setReadIds(getReadNotificationIds(wallet));

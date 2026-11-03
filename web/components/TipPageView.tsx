@@ -71,7 +71,7 @@ export default function TipPageView({ creatorInfo, onAddTip, isWidget = false }:
   };
 
   const handleConnectWallet = async () => {
-    const metaMask = connectors[0];
+    const metaMask = connectors.find((connector) => connector.id === 'metaMask');
     if (!metaMask) {
       setConnectError('MetaMask is not available. Install the MetaMask browser extension and try again.');
       return;

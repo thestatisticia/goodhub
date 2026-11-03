@@ -13,6 +13,7 @@ export function useGDollarBalance(address?: `0x${string}`) {
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
+    chainId: 42220,
     query: {
       enabled: !!address,
       refetchInterval: 15_000,

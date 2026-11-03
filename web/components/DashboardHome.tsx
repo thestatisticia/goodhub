@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { formatUnits, isAddress, parseUnits } from 'viem';
 import { useWalletClient, usePublicClient } from 'wagmi';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { readContractQueryKey } from '@wagmi/core/query';
 import { useCreator } from '@/providers/CreatorProvider';
 import { useGDollarBalance } from '@/hooks/useGDollarBalance';
 import { ERC20_ABI, G_DOLLAR_ADDRESS } from '@/lib/contracts';
@@ -104,7 +105,8 @@ export default function DashboardHome() {
   const { creator, tips, sentTips, tipStats, tipStatsError, refreshTipStats, walletAddress, isLoading: creatorLoading } = useCreator();
   const { balance: gBalance, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useGDollarBalance(walletAddress || undefined);
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: 42220 });
+  const queryClient = useQueryClient();
   const activityQuery = useDashboardActivity();
   const creatorStatsQuery = useQuery<CreatorDashboardStats>({
     queryKey: ['creator-dashboard-stats', walletAddress],
@@ -139,6 +141,7 @@ export default function DashboardHome() {
   const [amount, setAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawBalanceWarning, setWithdrawBalanceWarning] = useState<string | null>(null);
   const [withdrawTxHash, setWithdrawTxHash] = useState<`0x${string}` | null>(null);
   const [withdrawTxStatus, setWithdrawTxStatus] = useState<'pending' | 'confirmed' | 'failed' | null>(null);
 
@@ -163,6 +166,7 @@ export default function DashboardHome() {
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     setWithdrawError(null);
+    setWithdrawBalanceWarning(null);
     setWithdrawTxHash(null);
     setWithdrawTxStatus(null);
 
@@ -207,7 +211,28 @@ export default function DashboardHome() {
       }
       setWithdrawTxStatus('confirmed');
       setAmount('');
-      await refetchBalance();
+      try {
+        const confirmedBalance = await publicClient.readContract({
+          address: G_DOLLAR_ADDRESS,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [walletAddress],
+          blockNumber: receipt.blockNumber,
+        });
+        queryClient.setQueryData(
+          readContractQueryKey({
+            address: G_DOLLAR_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: 'balanceOf',
+            args: [walletAddress],
+            chainId: 42220,
+          }),
+          confirmedBalance,
+        );
+      } catch (balanceError: unknown) {
+        console.error('G$ transfer confirmed, but confirmed balance refresh failed:', balanceError);
+        setWithdrawBalanceWarning('Transfer confirmed. Your balance will update when the next refresh completes.');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Transfer failed';
       if (submittedTxHash) setWithdrawTxStatus('failed');
@@ -683,6 +708,11 @@ export default function DashboardHome() {
                   {withdrawError}
                 </p>
               )}
+              {withdrawBalanceWarning && (
+                <p role="status" className="rounded-lg bg-muted px-3.5 py-2.5 text-xs font-medium text-muted-foreground">
+                  {withdrawBalanceWarning}
+                </p>
+              )}
               {withdrawTxStatus && (
                 <p role="status" className={`rounded-lg px-3.5 py-2.5 text-xs font-medium ${
                   withdrawTxStatus === 'confirmed'
@@ -694,7 +724,7 @@ export default function DashboardHome() {
                   {withdrawTxStatus === 'pending'
                     ? 'Transaction submitted. Waiting for Celo confirmation…'
                     : withdrawTxStatus === 'confirmed'
-                      ? 'Transfer confirmed on Celo.'
+                      ? 'Transfer confirmed on Celo. Balance updated.'
                       : 'Transfer did not complete successfully.'}
                 </p>
               )}

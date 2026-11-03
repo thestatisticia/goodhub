@@ -1,15 +1,20 @@
 export function getWalletConnectionErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : '';
+  const messages = getNestedErrorMessages(error);
+  const message = messages.join(' ');
 
   if (/provider not found|metamask.*not (installed|detected)/i.test(message)) {
     return 'MetaMask was not detected. Install or unlock the MetaMask browser extension, then try again.';
+  }
+
+  if (/failed to connect to metamask|metamask extension not found|extension.*not found/i.test(message)) {
+    return 'MetaMask is installed, but this page could not reach its extension. Refresh the page and try again. If it continues, unlock MetaMask and make sure it is enabled for localhost.';
   }
 
   if (/user rejected|user denied/i.test(message)) {
     return 'The MetaMask connection request was rejected.';
   }
 
-  return message || 'Could not connect to MetaMask.';
+  return messages[0] || 'Could not connect to MetaMask.';
 }
 
 function getNestedErrorMessages(error: unknown): string[] {

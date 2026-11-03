@@ -15,7 +15,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [connectError, setConnectError] = useState('');
 
   const handleConnect = async () => {
-    const metaMask = connectors[0];
+    const metaMask = connectors.find((connector) => connector.id === 'metaMask');
     if (!metaMask) {
       setConnectError('MetaMask is not available. Install the MetaMask browser extension and try again.');
       return;
@@ -33,7 +33,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
         <div className="w-full max-w-sm animate-fade-up rounded-2xl border border-line bg-card p-8 text-center shadow-sm">
-          <GoodHubLogo className="h-10 text-base" />
+          <GoodHubLogo className="h-10 w-[170px]" />
           <h1 className="mt-5 font-display text-2xl font-bold tracking-tight">Connect MetaMask</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Connect your MetaMask wallet to access your GOODHUB dashboard.

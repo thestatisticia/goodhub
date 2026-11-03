@@ -54,7 +54,11 @@ export function syncNotifications(wallet: string, events: DashboardActivityEvent
   const readIds = new Set(readJson<string[]>(readKey, []));
 
   if (!previous) {
-    for (const event of events) readIds.add(event.id);
+    const historyCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const event of events) {
+      const eventTime = Date.parse(event.createdAt);
+      if (!Number.isFinite(eventTime) || eventTime < historyCutoff) readIds.add(event.id);
+    }
   } else {
     const previousIds = new Set(previous.map((event) => event.id));
     for (const event of events) {

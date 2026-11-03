@@ -16,7 +16,7 @@ const celo = defineChain({
 
 const wagmiConfig = createConfig({
   chains: [celo],
-  connectors: [injected({ target: 'metaMask' })],
+  connectors: [injected({ target: 'metaMask', shimDisconnect: false })],
   transports: { [celo.id]: http() },
   ssr: true,
 });
