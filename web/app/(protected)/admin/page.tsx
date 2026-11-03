@@ -103,31 +103,23 @@ export default function AdminPage() {
     try {
       const taskPayload = {};
       const taskAuth = await signTaskRequest('POST', '/api/tasks/review-queue', taskPayload);
-      const taskResult = await responseJson<TaskReview[]>(await fetch('/api/tasks/review-queue', {
+      const queues = await responseJson<{
+        tasks: TaskReview[];
+        applications: CampaignReview[];
+        content: ContentReview[];
+        wallets: AdminWallet[];
+      }>(await fetch('/api/tasks/review-queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auth: taskAuth }),
       }));
 
-      const campaignPayload = {};
-      const campaignAuth = await signTaskRequest('POST', '/api/campaigns/review-queue', campaignPayload);
-      const campaignResult = await responseJson<{
-        applications: CampaignReview[];
-        content: ContentReview[];
-      }>(await fetch('/api/campaigns/review-queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auth: campaignAuth }),
-      }));
-
-      setTaskReviews(taskResult);
-      setApplicationReviews(campaignResult.applications);
-      setContentReviews(campaignResult.content);
+      setTaskReviews(queues.tasks);
+      setApplicationReviews(queues.applications);
+      setContentReviews(queues.content);
+      setWallets(queues.wallets);
       setAuthorized(true);
       setDenied(false);
-      if (address?.toLowerCase() === MAIN_ADMIN_WALLET.toLowerCase()) {
-        setWallets(await adminWalletRequest<AdminWallet[]>('list'));
-      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setDenied(true);
@@ -195,7 +187,15 @@ export default function AdminPage() {
       await publicClient.waitForTransactionReceipt({ hash: campaignHash });
 
       await adminWalletRequest<{ walletAddress: string; action: string }>(action, normalizedAddress);
-      await loadWallets();
+      setWallets((current) => enabled
+        ? current.some((wallet) => wallet.wallet_address === normalizedAddress.toLowerCase())
+          ? current
+          : [...current, {
+            wallet_address: normalizedAddress.toLowerCase(),
+            added_by: address.toLowerCase(),
+            created_at: new Date().toISOString(),
+          }]
+        : current.filter((wallet) => wallet.wallet_address !== normalizedAddress.toLowerCase()));
       setNewWallet('');
       setNotice(enabled ? 'Reviewer added to both escrow contracts and the admin allowlist.' : 'Reviewer removed from both escrow contracts and the admin allowlist.');
     } catch (err) {
@@ -228,7 +228,7 @@ export default function AdminPage() {
         args: [submission.task.escrow_task_id, submission.worker_address as `0x${string}`],
         chainId: 42220,
       });
-      await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+      await publicClient.waitForTransactionReceipt({ hash: transactionHash, pollingInterval: 1000 });
 
       const payload = { submissionId: submission.id, decision, reviewNote, transactionHash };
       const auth = await signTaskRequest('POST', '/api/tasks/reviews', payload);
@@ -238,7 +238,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ...payload, auth }),
       }));
       setNotice(decision === 'approved' ? 'Task submission approved and reward released.' : 'Task submission rejected.');
-      await loadReviewQueues();
+      setTaskReviews((current) => current.filter((item) => item.id !== submission.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not review this task submission.');
     } finally {
@@ -273,7 +273,7 @@ export default function AdminPage() {
           args: [application.campaign.escrow_campaign_id, application.participant_address as `0x${string}`],
           chainId: 42220,
         });
-        await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+        await publicClient.waitForTransactionReceipt({ hash: transactionHash, pollingInterval: 1000 });
       }
       await responseJson(await fetch('/api/campaigns/applications/review', {
         method: 'POST',
@@ -281,7 +281,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ...payload, transactionHash, auth }),
       }));
       setNotice(decision === 'approved' ? 'Campaign participant approved.' : 'Campaign application rejected.');
-      await loadReviewQueues();
+      setApplicationReviews((current) => current.filter((item) => item.id !== application.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not review this campaign application.');
     } finally {
@@ -316,7 +316,7 @@ export default function AdminPage() {
           args: [item.campaign.escrow_campaign_id, item.application.participant_address as `0x${string}`],
           chainId: 42220,
         });
-        await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+        await publicClient.waitForTransactionReceipt({ hash: transactionHash, pollingInterval: 1000 });
       }
       await responseJson(await fetch('/api/campaigns/content/review', {
         method: 'POST',
@@ -324,7 +324,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ...payload, transactionHash, auth }),
       }));
       setNotice(decision === 'approved' ? 'Campaign content approved and reward released.' : 'Campaign content rejected.');
-      await loadReviewQueues();
+      setContentReviews((current) => current.filter((review) => review.id !== item.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not review this campaign content.');
     } finally {

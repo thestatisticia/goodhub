@@ -1,3 +1,5 @@
+import { keccak256, stringToHex } from 'viem';
+
 export interface TaskSignatureFields {
   address: string;
   nonce: string;
@@ -21,6 +23,7 @@ export function taskSignatureMessage(
   auth: TaskSignatureFields,
   payload: unknown,
 ): string {
+  const payloadHash = keccak256(stringToHex(stableJson(payload)));
   return [
     'TipJar Tasks',
     'Chain ID: 42220',
@@ -29,6 +32,6 @@ export function taskSignatureMessage(
     `Wallet: ${auth.address}`,
     `Nonce: ${auth.nonce}`,
     `Issued At: ${auth.issuedAt}`,
-    `Payload: ${stableJson(payload)}`,
+    `Payload hash: ${payloadHash}`,
   ].join('\n');
 }

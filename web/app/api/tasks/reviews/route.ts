@@ -14,9 +14,6 @@ export async function POST(request: NextRequest) {
   }
 
   const auth = body.auth as TaskAuth | undefined;
-  const verified = await verifyTaskAuth(auth, 'POST', '/api/tasks/reviews', body, true);
-  if (isAuthFailure(verified)) return verified;
-
   const { submissionId, decision, reviewNote, transactionHash } = body;
   if (
     typeof submissionId !== 'string' || !UUID.test(submissionId) ||
@@ -29,6 +26,8 @@ export async function POST(request: NextRequest) {
   if (decision === 'rejected' && !reviewNote.trim()) {
     return NextResponse.json({ error: 'Add a reason when rejecting a submission.' }, { status: 400 });
   }
+  const verified = await verifyTaskAuth(auth, 'POST', '/api/tasks/reviews', body, true);
+  if (isAuthFailure(verified)) return verified;
 
   const supabase = createServerSupabaseClient();
   const { data: submission, error: submissionError } = await supabase

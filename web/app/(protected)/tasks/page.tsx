@@ -341,7 +341,7 @@ export default function TasksPage() {
 
     setError('');
     setNotice('');
-    setBusy('Submitting proof…');
+    setBusy('Preparing proof…');
     try {
       await ensureCelo();
       await responseJson(await fetch(`/api/tasks?taskId=${encodeURIComponent(proofTask.id)}`));
@@ -362,8 +362,17 @@ export default function TasksPage() {
         }
       }
       const proofStoragePath = proofFile ? await uploadScreenshot(proofTask, proofFile) : '';
+      const payload = {
+        taskId: proofTask.id,
+        proofText: proofText.trim(),
+        proofUrl: proofUrl.trim(),
+        proofStoragePath,
+      };
+      setBusy('Confirm the proof details in MetaMask…');
+      const auth = await signTaskRequest('POST', '/api/tasks/submissions', payload);
       let reservationTxHash: Hex | '' = '';
       if (submissionState === 0) {
+        setBusy('Confirm the reservation in MetaMask…');
         reservationTxHash = await writeContractAsync({
           address: ESCROW_ADDRESS,
           abi: TASK_ESCROW_ABI,
@@ -371,21 +380,22 @@ export default function TasksPage() {
           args: [proofTask.escrow_task_id],
           chainId: 42220,
         });
-        await publicClient.waitForTransactionReceipt({ hash: reservationTxHash });
+        setBusy('Waiting for Celo to confirm the reservation…');
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: reservationTxHash,
+          pollingInterval: 1000,
+        });
+        if (receipt.status !== 'success') {
+          throw new Error('The task reservation transaction failed on Celo.');
+        }
       }
 
-      const payload = {
-        taskId: proofTask.id,
-        proofText: proofText.trim(),
-        proofUrl: proofUrl.trim(),
-        proofStoragePath,
-        reservationTxHash,
-      };
-      const auth = await signTaskRequest('POST', '/api/tasks/submissions', payload);
+      setBusy('Saving proof for review…');
+      const submissionPayload = { ...payload, reservationTxHash };
       const savedSubmission = await responseJson(await fetch('/api/tasks/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, auth }),
+        body: JSON.stringify({ ...submissionPayload, auth }),
       }));
 
       setProofTask(null);
@@ -522,17 +532,6 @@ export default function TasksPage() {
             <button type="button" onClick={() => setProofTask(null)} className="text-sm text-muted-foreground hover:text-foreground">Cancel</button>
           </div>
           <form onSubmit={submitProof} className="mt-4 grid gap-3">
-            <p className="rounded-lg border border-line bg-background p-3 text-xs leading-5 text-muted-foreground">
-              Estimated Celo network fee:{' '}
-              {gasEstimateQuery.isPending
-                ? 'checking…'
-                : gasEstimateQuery.data
-                  ? gasEstimateQuery.data.alreadyReserved
-                    ? 'Reservation already confirmed; no new reservation transaction is needed.'
-                    : `${formatUnits(BigInt(gasEstimateQuery.data.fee), 18)} CELO`
-                  : 'not available yet. MetaMask will show the fee before you confirm.'}
-              {' '}The displayed estimate can change; MetaMask shows the final fee. Rejecting the wallet prompt does not submit a transaction or charge gas.
-            </p>
             {gasEstimateQuery.error && (
               <p role="alert" className="rounded-lg bg-danger-bg p-3 text-sm text-danger">
                 {gasEstimateQuery.error.message === 'This task is already completed by your wallet.'
